@@ -1,9 +1,6 @@
 # File types #
 ##############
 *.pyc
-*.swo
-*.swp
-*.swn
 *.wav
 *.conf
 

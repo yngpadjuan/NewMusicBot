@@ -12,7 +12,6 @@ from six.moves.configparser import RawConfigParser
 from pyudev import Context, Monitor, MonitorObserver
 
 
-
 config = RawConfigParser()
 config.read(f'{os.getcwd()}/settings.conf')
 
