@@ -1,0 +1,27 @@
+# File types #
+##############
+*.pyc
+*.swo
+*.swp
+*.swn
+*.wav
+*.conf
+
+# Directories #
+###############
+logs/
+test/
+tmp/
+backup/
+
+# Specific files #
+##################
+WAVfilePrep
+
+# OS generated files #
+######################
+.DS_Store
+ehthumbs.db
+Icon
+Thumbs.db
+*~
