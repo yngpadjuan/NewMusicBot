@@ -1,7 +1,6 @@
 import sys
-import datetime
 import discord
-from .paths import get_config, get_logger, LOG_DIR
+from .paths import get_config, get_logger
 
 log = get_logger(__name__)
 
@@ -22,16 +21,11 @@ async def on_ready():
 
 @client.event
 async def on_error(event, *args, **kwargs):
-    err_log = LOG_DIR / 'discorderr.log'
-    with open(err_log, 'a') as f:
-        ts = datetime.datetime.now().strftime('[%Y-%m-%d %H:%M:%S]')
-        if event == 'on_message':
-            msg = f'{ts} Unhandled message: {args[0]}\n'
-            f.write(msg)
-        else:
-            msg = f'{ts} {event}\n'
-            f.write(msg)
-
+    if event == 'on_message':
+        msg = f'Unhandled message: {args[0]}'
+    else:
+        msg = event
+    log.error(msg)
     channel = client.get_channel(ALERT_CHANNEL_ID)
     await channel.send(msg)
     await client.close()
