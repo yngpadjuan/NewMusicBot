@@ -81,17 +81,19 @@ class filePrep():
             return chunk_list
 
 
-    def masterAudio(self,chunk_name):
+    def masterAudio(self, chunk_name):
         logging.info(" Mastering chunk " + chunk_name)
-        #Matchering the tracks
+        tmp_out = chunk_name + '.mastered.wav'
         try:
-            mg.process(target=f'{chunk_name}', reference=self.ref_file, results=[
-                mg.pcm24(f'{chunk_name}'),
-                ],
-            )
+            mg.process(target=chunk_name, reference=self.ref_file, results=[
+                mg.pcm24(tmp_out),
+            ])
         except Exception as e:
             logging.error(e)
+            if os.path.exists(tmp_out):
+                os.remove(tmp_out)
             raise
+        os.replace(tmp_out, chunk_name)
 
     def convertToMP3(self):
         logging.info(f" Converting {self.wavTag} to MP3.")
