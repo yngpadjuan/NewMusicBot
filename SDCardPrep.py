@@ -5,6 +5,7 @@ import logging
 import filecmp
 import psutil
 #from time import sleep
+import time
 from subprocess import call, check_call, CalledProcessError
 #from datetime import datetime
 from six.moves.configparser import RawConfigParser
@@ -21,11 +22,9 @@ logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S')
 
 
-def discordMessage(message,channel_id):
+def discordMessage(message, channel_id):
     try:
-        os.environ['MESSAGE'] = message
-        os.environ['CHANNEL'] = str(channel_id)
-        call(['python3','/home/pi/Music/BoxMusic/DiscordMusicAlert.py'])
+        call(['python3', '/home/pi/Music/BoxMusic/DiscordMusicAlert.py', str(channel_id), message])
     except Exception as e:
         logging.error(e)
 
@@ -103,9 +102,18 @@ def main(argv):
     if s.fileExists():
         logging.info(f"{audiof.mp3Tag} is already uploaded to the site. Skipping upload.")
     else:
-        while not s.Upload():
-            pass
-            #logging.warning(f'Oops...something went wrong UPLOADING {audiof.mp3Tag}. Trying again...')
+        max_retries = 5
+        for attempt in range(1, max_retries + 1):
+            if s.Upload():
+                break
+            if attempt == max_retries:
+                msg = f'Upload failed after {max_retries} attempts: {audiof.mp3Tag}. Giving up.'
+                logging.error(msg)
+                discordMessage(msg, 958901182351417354)
+                raise RuntimeError(msg)
+            wait = 2 ** attempt
+            logging.warning(f'Upload attempt {attempt} failed for {audiof.mp3Tag}. Retrying in {wait}s...')
+            time.sleep(wait)
 
         msg = (f'Oh Snap! New music @everyone!\n {audiof.mp3Tag.replace(".mp3","")}\n was just uploaded.')
         discordMessage(msg,565726777138479104)

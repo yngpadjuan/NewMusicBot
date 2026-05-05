@@ -19,11 +19,9 @@ logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S')
 
 
-def discordMessage(message,channel_id):
+def discordMessage(message, channel_id):
     try:
-        os.environ['MESSAGE'] = message
-        os.environ['CHANNEL'] = str(channel_id)
-        call(['python3','/home/pi/Music/BoxMusic/DiscordMusicAlert.py'])
+        call(['python3', '/home/pi/Music/BoxMusic/DiscordMusicAlert.py', str(channel_id), message])
     except Exception as e:
         logging.error(e)
 

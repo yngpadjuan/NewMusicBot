@@ -27,6 +27,7 @@ class serverConnect:
         self.f_blocksize = 8192
         self.total_size = os.path.getsize(file)
         self.size_written = 0
+        self._size_lock = threading.Lock()
 
         default_profile = {
             "server_ip": None,
@@ -53,7 +54,8 @@ class serverConnect:
     def Upload(self):
         
         def handle(block):
-            self.size_written = self.size_written + self.f_blocksize if self.size_written + self.f_blocksize < self.total_size else self.total_size
+            with self._size_lock:
+                self.size_written = self.size_written + self.f_blocksize if self.size_written + self.f_blocksize < self.total_size else self.total_size
         
         def background():
             try:
@@ -96,17 +98,16 @@ class serverConnect:
         while t.is_alive():
             t.join(120)
             
-            if self.size_written:
-                percent_complete = self.size_written / self.total_size
-                logging.info(("{:.1%} percent complete").format(percent_complete))                
+            with self._size_lock:
+                size_snapshot = self.size_written
+            if size_snapshot:
+                percent_complete = size_snapshot / self.total_size
+                logging.info(("{:.1%} percent complete").format(percent_complete))
 
-                #if ftp completes upload, but fails to quit gracefully, force close and continue
                 if percent_complete == 1:
-                    #logging.warning("FAILED to quit ftp connection; forcing close.")
                     ftp.close()
                     return True
-        
-        #if ftp exits gracefully, continue script
+
         if percent_complete == 1:
             return True
 

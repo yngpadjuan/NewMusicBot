@@ -1,4 +1,5 @@
 import os
+import sys
 import datetime
 import discord
 from six.moves.configparser import RawConfigParser
@@ -36,7 +37,7 @@ async def on_error(event, *args, **kwargs):
             await channel.send(msg)
             await client.close()
 
-message = os.getenv('MESSAGE')
-channel_id = int(os.getenv('CHANNEL'))
+channel_id = int(sys.argv[1])
+message = sys.argv[2]
 
 client.run(TOKEN)
