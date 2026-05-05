@@ -59,38 +59,35 @@ class serverConnect:
         
         def background():
             try:
-                ftp.login(f'{self.username}',f'{self.api_key}')
-                ftp.cwd(self.dest_folder)
-            except Exception as e:
-                logging.error(e)
+                with ftplib.FTP(self.server_ip) as ftp:
+                    try:
+                        ftp.login(self.username, self.api_key)
+                        ftp.cwd(self.dest_folder)
+                    except Exception as e:
+                        logging.error(e)
+                        return
 
-            p,f = os.path.split(self.file)
-            
-            if self.size_written:
-                self.size_written = ftp.size(f)
-                logging.info("Upload restarting...")
-            else:
-                logging.info("Uploading...")
+                    p, f = os.path.split(self.file)
 
-            try:
-                with open(self.file,'rb') as fileh:
-                    fileh.seek(self.size_written)                    
-                    response = ftp.storbinary("STOR "+f, fileh, callback=handle,
-                                               blocksize=self.f_blocksize, rest=self.size_written)        
-                logging.info(response)
+                    with self._size_lock:
+                        resume_from = self.size_written
+                    if resume_from:
+                        with self._size_lock:
+                            self.size_written = ftp.size(f)
+                        logging.info("Upload restarting...")
+                    else:
+                        logging.info("Uploading...")
+
+                    try:
+                        with open(self.file, 'rb') as fileh:
+                            fileh.seek(resume_from)
+                            response = ftp.storbinary("STOR " + f, fileh, callback=handle,
+                                                      blocksize=self.f_blocksize, rest=resume_from)
+                        logging.info(response)
+                    except Exception as e:
+                        logging.error(e)
             except Exception as e:
-                logging.error(e)            
-            else:
-                quit = ftp.quit()
-                logging.info(quit)
-            finally:
-                ftp.close()
-        
-        try:
-            ftp = ftplib.FTP(f'{self.server_ip}')
-        except Exception as e:
-            logging.error(f'Unable to connect to server. {e}')
-            return False
+                logging.error(f'Unable to connect to server. {e}')
 
         percent_complete = 0
         t = threading.Thread(target=background)
@@ -105,7 +102,6 @@ class serverConnect:
                 logging.info(("{:.1%} percent complete").format(percent_complete))
 
                 if percent_complete == 1:
-                    ftp.close()
                     return True
 
         if percent_complete == 1:
@@ -115,27 +111,22 @@ class serverConnect:
            
            
     def fileExists(self):
-        ftp = ftplib.FTP(f'{self.server_ip}')
-        p,f = os.path.split(self.file)
-        ftp.login(f'{self.username}',f'{self.api_key}')
-        ftp.cwd(self.dest_folder)
-
-        filelist = []
-        ftp.retrlines('LIST',filelist.append)
-
-        for file in filelist:
-            logging.debug(f)
-            if f in file:
-                if os.path.getsize(self.file) == ftp.size(f):
-                    return True
-        
+        p, f = os.path.split(self.file)
+        with ftplib.FTP(self.server_ip) as ftp:
+            ftp.login(self.username, self.api_key)
+            ftp.cwd(self.dest_folder)
+            filelist = []
+            ftp.retrlines('LIST', filelist.append)
+            for file in filelist:
+                logging.debug(f)
+                if f in file:
+                    if os.path.getsize(self.file) == ftp.size(f):
+                        return True
         return False
 
     def deleteFile(self):
-        ftp = ftplib.FTP(f'{self.server_ip}')
-        ftp.login(f'{self.username}',f'{self.api_key}')
-        ftp.cwd(self.dest_folder)
-
-        p,f = os.path.split(self.file)
-
-        ftp.delete(f)
+        p, f = os.path.split(self.file)
+        with ftplib.FTP(self.server_ip) as ftp:
+            ftp.login(self.username, self.api_key)
+            ftp.cwd(self.dest_folder)
+            ftp.delete(f)
