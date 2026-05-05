@@ -12,7 +12,7 @@ ALERT_CHANNEL_ID = config.getint('NewMusicBot', 'alertChannelId')
 channel_id = int(sys.argv[1])
 message = sys.argv[2]
 
-client = discord.Client()
+client = discord.Client(intents=discord.Intents.default())
 
 @client.event
 async def on_ready():
