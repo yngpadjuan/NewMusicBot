@@ -14,7 +14,9 @@ config = RawConfigParser()
 config.read(f'{os.getcwd()}/settings.conf')
 
 numeric_level = getattr(logging, config.get('NewMusicBot','logLevel').upper(), None)
-logging.basicConfig(filename='/var/log/WAVfilePrep/filePrep.log', level=numeric_level)
+logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
+                    filename='/var/log/WAVfilePrep/filePrep.log', level=numeric_level,
+                    datefmt='%Y-%m-%d %H:%M:%S')
 
 
 def discordMessage(message,channel_id):
@@ -55,8 +57,7 @@ def main(argv):
     file = argv[0]
     start = argv[1]
     end = argv[2]
-    if argv[3]:
-        songName = argv[3]
+    songName = argv[3]
 
     audiof = filePrep()
 
@@ -64,10 +65,14 @@ def main(argv):
     backup_loc = config.get('music','backupFolder')
     ftp_dest = config.get('music','ftpfolder')
 
+    if not os.path.exists(dest_loc):
+        discordMessage('Failed to mount music disk! Exiting.',958901182351417354)
+        sys.exit(1)
+
     Path(dest_loc).mkdir(parents=True, exist_ok=True)
     Path(backup_loc).mkdir(parents=True, exist_ok=True)
 
-    if not songName:
+    if songName == "None":
         songName = random_name()
     
     if not Path(f"{dest_loc}/{songName}.mp3").exists():
@@ -83,6 +88,7 @@ def main(argv):
             logging.error(e)
             msg = (f'Oops...something went wrong MASTERING {songName}.')
             discordMessage(msg,958901182351417354)
+            raise
         else:
             shutil.move(f"{audiof.tmpPath}/{songName}.mp3", dest_loc)
 
@@ -100,9 +106,11 @@ def main(argv):
             logging.warning(e)
             msg = (f'Oops...something went wrong UPLOADING {songName}.')
             discordMessage(msg,958901182351417354)
+            s.deleteFile()
+            raise
         else:
-            msg = (f'Oh Snap! @everyone New music!\n {songName.replace(".mp3","")}\n was just uploaded.')
-            discordMessage(msg,565726777138479104)
+            msg = (f'@everyone BoX has released a new song! \n Check out {songName.replace(".mp3","")}!')
+            discordMessage(msg,565687695507193878)
     else:
         msg = (f'Oops... {songName} already exists. Not continuing.')
         discordMessage(msg,958901182351417354)
@@ -111,8 +119,9 @@ def main(argv):
         try:
             shutil.copy(f'{dest_loc}/{songName}.mp3',backup_loc)
         except Exception as e:
-            msg = (f'Oops...something went wrong COPYING {songName} to {backup_loc}.')
-            raise msg
+            msg = (f'Oops...something went wrong BACKING UP {songName} to {backup_loc}.')
+            logging.error(msg)
+            raise
     else:
         logging.info(f"{songName}.mp3 backup already exists.")
 

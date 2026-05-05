@@ -15,9 +15,11 @@ from pyudev import Context, Monitor, MonitorObserver
 config = RawConfigParser()
 config.read(f'{os.getcwd()}/settings.conf')
 
-logging.basicConfig(filename='/var/log/WAVfilePrep/filePrep.log', level=logging.WARN)
+logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
+                    filename='/var/log/WAVfilePrep/filePrep.log', level=logging.WARN,
+                    datefmt='%Y-%m-%d %H:%M:%S')
 
-TOKEN = config.get('NewMusicBot','TOKEN')
+TOKEN = config.get('NewMusicBot','token')
 
 bot = commands.Bot(command_prefix="!")
 q = queue.Queue()
@@ -27,21 +29,38 @@ def worker():
     while True:
         file = q.get()
         logging.info(f"{file} retreived from Queue")
-        if file[0] == "filePrep":
-            try:
-                subprocess.run([sys.executable,'/home/pi/Music/BoxMusic/SDCardPrep.py', file[1]],check=True)
-            except subprocess.CalledProcessError as e:
-                msg = (f"Error processing {file[1]}: Code{e.returncode}. Retrying.")
-                logging.error(msg)
-                subprocess.call(['sh','/home/pi/Music/BoxMusic/DiscordMusicAlert.sh',f'{msg}','958901182351417354'])
-                q.put(file)
-        elif file[0] == "publishSong":
-            try:
-                subprocess.run([sys.executable,'/home/pi/Music/BoxMusic/songPrep.py', file[1], file[2], file[3], file[4]],check=True)
-            except subprocess.CalledProcessError as e:
-                msg = (f"Error processing {file[1]}: Code{e.returncode}.")
-                logging.error(msg)
-                subprocess.call(['sh','/home/pi/Music/BoxMusic/DiscordMusicAlert.sh',f'{msg}','958901182351417354'])
+        try:
+            if file[0] == "filePrep":
+                try:
+                    subprocess.run([sys.executable,'/home/pi/Music/BoxMusic/SDCardPrep.py', file[1]],check=True)
+                except subprocess.CalledProcessError as e:
+                    #if not e.returncode == -15 or e.returncode == -9:
+                    msg = (f"Error processing {file[1]}: Code {e.returncode}.")
+                    logging.error(msg)
+                    subprocess.call(['sh','/home/pi/Music/BoxMusic/DiscordMusicAlert.sh',f'{msg}','958901182351417354'])
+                    for filename in os.listdir(r'/home/pi/Music/BoxMusic/tmp'):
+                        file_path = os.path.join(r'/home/pi/Music/BoxMusic/tmp', filename)
+                        os.remove(file_path)                    
+                        #q.put(file)
+                    # else:
+                    #     if e.returncode == -15:
+                    #         msg = (f"User process kill received. Cancel mastering.")
+                    #         logging.error(msg)
+                    #     elif e.returncode == -9:
+                    #         msg = (f"OOM killed process. File probably too big. Not retrying.")
+                    #         logging.error(msg)
+                    #         subprocess.call(['sh','/home/pi/Music/BoxMusic/DiscordMusicAlert.sh',f'{msg}','958901182351417354']) 
+
+            elif file[0] == "publishSong":
+                try:
+                    subprocess.run([sys.executable,'/home/pi/Music/BoxMusic/songPrep.py', file[1], file[2], file[3], file[4]],check=True)
+                except subprocess.CalledProcessError as e:
+                    msg = (f"Error processing {file[1]}: Code{e.returncode}.")
+                    logging.error(msg)
+                    subprocess.call(['sh','/home/pi/Music/BoxMusic/DiscordMusicAlert.sh',f'{msg}','958901182351417354'])
+        except Exception as e:
+            logging.error(e)
+            subprocess.call(['sh','/home/pi/Music/BoxMusic/DiscordMusicAlert.sh',f'{e}','958901182351417354'])
 
 
 def filePrep(device):
@@ -52,12 +71,16 @@ def filePrep(device):
     #     print(prop, device.get(f'{prop}'))
 
     if (device.action == 'change' or device.action == 'add') and (device.get('ID_FS_TYPE') == 'vfat' and device.get('ID_FS_UUID')):
-        location = config.get('NewMusicBot','location')      
-        src_folder = f"/media/pi/{device.get('ID_FS_UUID')}{config.get(location,'sdfolder')}"
-        logging.info("SourceFolder is set to:" + src_folder)
+        location = config.get('NewMusicBot','location')
+        src_folder = None
 
-        logging.info(f'Source Folder exists: {Path(src_folder).exists()}')
-        if Path(src_folder).exists():
+        if Path(f"/media/pi/{device.get('ID_FS_UUID')}{config.get(location,'sdfolder')}").exists():
+            src_folder = f"/media/pi/{device.get('ID_FS_UUID')}{config.get(location,'sdfolder')}"
+        elif Path(f"/media/pi/H4N_SD/{config.get(location,'sdfolder')}").exists():
+            src_folder = f"/media/pi/H4N_SD/{config.get(location,'sdfolder')}"
+                     
+        if src_folder:
+            logging.info("SourceFolder is set to:" + src_folder)  
             for (dirpath, dirnames, filenames) in os.walk(src_folder):
                 if dirpath == src_folder: 
                     logging.info(f'Found {filenames} in {src_folder}')
@@ -66,6 +89,7 @@ def filePrep(device):
                             item = ['filePrep', os.path.join(dirpath,file)]
                             logging.debug(f'Adding {item} to queue.')        
                             q.put(item)
+                
         else:
             msg = (f'Unable to find audio tracks in SD card.')
             logging.info(msg)
@@ -112,6 +136,9 @@ async def publish(ctx, song: str, start: str, stop: str, title:str=None):
             else:
                 await ctx.send(f"Oops... unable to find that file name. Check your spelling.")
 
+            if not title:
+                title = "None"
+
             await ctx.send(f"Started publishing {song}. Start: {start} Stop: {stop}")
             q.put(['publishSong',file, start, stop, title])
 
@@ -122,7 +149,7 @@ async def publish(ctx, song: str, start: str, stop: str, title:str=None):
 
 @bot.command(pass_context=True)
 @commands.has_role('songadmin')
-async def set_session_name(ctx, location, session:str=None):
+async def set_session_name(ctx, location:str, session:str=None):
     locations = ['basement','gigs']
     if session:
         if location.lower() in locations:
@@ -137,7 +164,7 @@ async def set_session_name(ctx, location, session:str=None):
 
 @bot.command(pass_context=True)
 @commands.has_role('songadmin')
-async def get_session_name(ctx, location):
+async def get_session_name(ctx, location:str):
     await ctx.send(f"Session Name for {location}: {config.get(location,'sessionName')}")
 
 @bot.command(pass_context=True)

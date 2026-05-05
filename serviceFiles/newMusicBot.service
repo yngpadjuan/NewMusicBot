@@ -1,0 +1,14 @@
+[Unit]
+Description=NewMusicBot Start Service
+After=network-online.target
+
+[Service]
+ExecStart=/bin/bash /home/pi/Music/BoxMusic/serviceStart.sh
+WorkingDirectory=/home/pi/Music/BoxMusic/
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=pi
+
+[Install]
+WantedBy=multi-user.target

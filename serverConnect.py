@@ -2,7 +2,7 @@ import os
 import six
 import ftplib
 import logging
-from time import sleep
+import threading
 from six.moves.configparser import RawConfigParser
 
 
@@ -10,7 +10,9 @@ config = RawConfigParser()
 config.read(f'{os.getcwd()}/settings.conf')
 
 numeric_level = getattr(logging, config.get('NewMusicBot','logLevel').upper(), None)
-logging.basicConfig(filename='/var/log/WAVfilePrep/filePrep.log', level=numeric_level)
+logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
+                    filename='/var/log/WAVfilePrep/filePrep.log', level=numeric_level,
+                    datefmt='%Y-%m-%d %H:%M:%S')
 
 
 class serverConnect:
@@ -22,6 +24,9 @@ class serverConnect:
 
         self.file = file
         self.dest_folder = dest_folder
+        self.f_blocksize = 8192
+        self.total_size = os.path.getsize(file)
+        self.size_written = 0
 
         default_profile = {
             "server_ip": None,
@@ -46,41 +51,90 @@ class serverConnect:
             self.ssl_verify = credentials.get("default","ssl_verify")
 
     def Upload(self):
-        f_blocksize = 1024
-        ftp = ftplib.FTP(f'{self.server_ip}')
-        p,f = os.path.split(self.file)
-
-        fileh = open(self.file,'rb')
-        logging.info("Uploading...")
         
-        response = '000-Start of Upload'
-        while response[:3] != '226':
+        def handle(block):
+            self.size_written = self.size_written + self.f_blocksize if self.size_written + self.f_blocksize < self.total_size else self.total_size
+        
+        def background():
             try:
                 ftp.login(f'{self.username}',f'{self.api_key}')
-                #print(ftp.getwelcome())
                 ftp.cwd(self.dest_folder)
+            except Exception as e:
+                logging.error(e)
 
-                response = ftp.storbinary("STOR "+f, fileh, f_blocksize)
+            p,f = os.path.split(self.file)
+            
+            if self.size_written:
+                self.size_written = ftp.size(f)
+                logging.info("Upload restarting...")
+            else:
+                logging.info("Uploading...")
+
+            try:
+                with open(self.file,'rb') as fileh:
+                    fileh.seek(self.size_written)                    
+                    response = ftp.storbinary("STOR "+f, fileh, callback=handle,
+                                               blocksize=self.f_blocksize, rest=self.size_written)        
                 logging.info(response)
-            except Exception as response:
-                logging.error(response)
-                sleep(300)
-   
-        fileh.close()
-        ftp.quit()
-    
+            except Exception as e:
+                logging.error(e)            
+            else:
+                quit = ftp.quit()
+                logging.info(quit)
+            finally:
+                ftp.close()
+        
+        try:
+            ftp = ftplib.FTP(f'{self.server_ip}')
+        except Exception as e:
+            logging.error(f'Unable to connect to server. {e}')
+            return False
+
+        percent_complete = 0
+        t = threading.Thread(target=background)
+        t.start()
+        while t.is_alive():
+            t.join(120)
+            
+            if self.size_written:
+                percent_complete = self.size_written / self.total_size
+                logging.info(("{:.1%} percent complete").format(percent_complete))                
+
+                #if ftp completes upload, but fails to quit gracefully, force close and continue
+                if percent_complete == 1:
+                    #logging.warning("FAILED to quit ftp connection; forcing close.")
+                    ftp.close()
+                    return True
+        
+        #if ftp exits gracefully, continue script
+        if percent_complete == 1:
+            return True
+
+        return False
+           
+           
     def fileExists(self):
         ftp = ftplib.FTP(f'{self.server_ip}')
         p,f = os.path.split(self.file)
         ftp.login(f'{self.username}',f'{self.api_key}')
+        ftp.cwd(self.dest_folder)
 
         filelist = []
-        ftp.cwd(self.dest_folder)
         ftp.retrlines('LIST',filelist.append)
 
         for file in filelist:
             logging.debug(f)
             if f in file:
-                return True
+                if os.path.getsize(self.file) == ftp.size(f):
+                    return True
         
         return False
+
+    def deleteFile(self):
+        ftp = ftplib.FTP(f'{self.server_ip}')
+        ftp.login(f'{self.username}',f'{self.api_key}')
+        ftp.cwd(self.dest_folder)
+
+        p,f = os.path.split(self.file)
+
+        ftp.delete(f)

@@ -3,10 +3,8 @@ import sys
 import shutil
 import logging
 import filecmp
-import psutil
-#from time import sleep
-from subprocess import call, check_call, CalledProcessError
-#from datetime import datetime
+from subprocess import call
+from datetime import datetime
 from six.moves.configparser import RawConfigParser
 
 from fileTasks import filePrep
@@ -37,11 +35,10 @@ def main(argv):
     if not os.path.exists(audiof.dest_folder):
         discordMessage('Failed to mount music disk! Exiting.',958901182351417354)
         sys.exit(1)
-    
     if not os.path.exists(audiof.backup_folder):
         discordMessage('Failed to mount backup disk! Exiting.',958901182351417354)
         sys.exit(1)
-        
+    
     if not os.path.isfile(os.path.join(audiof.mp3Path,audiof.mp3Tag)):
         chunkList = []
         msg = (f'Started the filePrep process on: {audiof.wavTag}')
@@ -72,43 +69,46 @@ def main(argv):
         
         #master the file
         try:
-            chunkList = audiof.fileChunk()                
+            chunkList = audiof.fileChunk(audiof.wavTag)                
             for chunk in chunkList:
                 audiof.masterAudio(chunk)
-                #audiof.convertToMP3(chunk)
-            audiof.mergingChunks(chunkList)
-            audiof.convertToMP3()
+                audiof.convertToMP3(chunk)
+            audiof.mergingChunks(audiof.mp3Tag, chunkList)
         except Exception as e:
             logging.error(e)
             msg = (f'Oops...something went wrong MASTERING {audiof.wavTag}.')
             discordMessage(msg,958901182351417354)              
             raise
-
-        #move the files to the music disk        
-        try:
+        else:
             shutil.move(os.path.join(audiof.tmpPath,audiof.wavTag), audiof.wavPath)
             shutil.move(os.path.join(audiof.tmpPath,audiof.mp3Tag), audiof.mp3Path)
-        except Exception as e:
-            logging.error(e)
+            if logging.root.level <= 10:
+                msg = (f'Uploading {audiof.mp3Tag} now.')
+                discordMessage(msg,958901182351417354)
+        
+        for tmpfile in chunkList:
+            os.remove(os.path.join(audiof.tmpPath,tmpfile))
 
     else:
         logging.info(f"{audiof.mp3Tag} already exists. Skipping to file upload to server.")
-    
-    if logging.root.level <= 10:
-        msg = (f'Uploading {audiof.mp3Tag} now.')
-        discordMessage(msg,958901182351417354)
+
 
     #upload file to website
     s = serverConnect(os.path.join(audiof.mp3Path,audiof.mp3Tag),audiof.ftp_folder)
-    if s.fileExists():
-        logging.info(f"{audiof.mp3Tag} is already uploaded to the site. Skipping upload.")
+    if not s.fileExists():
+        try: 
+            s.Upload()
+        except Exception as e:
+            logging.warning(e)
+            msg = (f'Oops...something went wrong UPLOADING {audiof.mp3Tag}.')
+            discordMessage(msg,958901182351417354)
+            s.deleteFile()
+            raise
+        else:
+            msg = (f'Oh Snap! @everyone New music!\n {audiof.mp3Tag.replace(".mp3","")}\n was just uploaded.')
+            discordMessage(msg,565726777138479104)
     else:
-        while not s.Upload():
-            pass
-            #logging.warning(f'Oops...something went wrong UPLOADING {audiof.mp3Tag}. Trying again...')
-
-        msg = (f'Oh Snap! New music @everyone!\n {audiof.mp3Tag.replace(".mp3","")}\n was just uploaded.')
-        discordMessage(msg,565726777138479104)
+        logging.info(f"{audiof.mp3Tag} is already uploaded to the site. Skipping upload.")
 
 
     if not os.path.isfile(os.path.join(audiof.backup_folder,audiof.mp3Tag)):
@@ -131,8 +131,8 @@ def main(argv):
     else:
         logging.info(f"{audiof.mp3Tag} is already backed up.")
                           
-    #date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    msg = f'COMPLETED filePrep on {file}'
+    date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    msg = f'Completed filePrep on {file}: {date}'
     logging.info(msg)
     if logging.root.level <= 10:
         discordMessage(msg,958901182351417354)  
