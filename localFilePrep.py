@@ -5,13 +5,16 @@ import logging
 import filecmp
 from subprocess import call
 from datetime import datetime
-from six.moves.configparser import RawConfigParser
+from configparser import RawConfigParser
 
 from fileTasks import filePrep
 from serverConnect import serverConnect
 
 config = RawConfigParser()
 config.read(f'{os.getcwd()}/settings.conf')
+
+ALERT_CHANNEL_ID = config.getint('NewMusicBot', 'alertChannelId')
+PUBLISH_CHANNEL_ID = config.getint('NewMusicBot', 'publishChannelId')
 
 numeric_level = getattr(logging, config.get('NewMusicBot','logLevel').upper(), None)
 logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
@@ -31,16 +34,16 @@ def main(argv):
     audiof = filePrep(file)
 
     if not os.path.exists(audiof.dest_folder):
-        discordMessage('Failed to mount music disk! Exiting.',958901182351417354)
+        discordMessage('Failed to mount music disk! Exiting.',ALERT_CHANNEL_ID)
         sys.exit(1)
     if not os.path.exists(audiof.backup_folder):
-        discordMessage('Failed to mount backup disk! Exiting.',958901182351417354)
+        discordMessage('Failed to mount backup disk! Exiting.',ALERT_CHANNEL_ID)
         sys.exit(1)
     
     if not os.path.isfile(os.path.join(audiof.mp3Path,audiof.mp3Tag)):
         chunkList = []
         msg = (f'Started the filePrep process on: {audiof.wavTag}')
-        discordMessage(msg,958901182351417354)
+        discordMessage(msg,ALERT_CHANNEL_ID)
 
         if os.path.isfile(os.path.join(audiof.tmpPath,audiof.wavTag)):
             logging.info(f"{os.path.join(audiof.tmpPath,audiof.wavTag)} exists. Checking fidelity.")           
@@ -52,7 +55,7 @@ def main(argv):
                 except Exception as e:
                     logging.error(e)
                     msg = (f'Something went wrong COPYING {e}.')
-                    discordMessage(msg,958901182351417354)
+                    discordMessage(msg,ALERT_CHANNEL_ID)
             else:
                 logging.info(f"{file} already copied from SD Card. Moving on.")
         else:
@@ -63,7 +66,7 @@ def main(argv):
             except Exception as e:
                 logging.error(e)
                 msg = (f'Something went wrong COPYING {e}.')
-                discordMessage(msg,958901182351417354)
+                discordMessage(msg,ALERT_CHANNEL_ID)
         
         #master the file
         try:
@@ -75,14 +78,14 @@ def main(argv):
         except Exception as e:
             logging.error(e)
             msg = (f'Oops...something went wrong MASTERING {audiof.wavTag}.')
-            discordMessage(msg,958901182351417354)              
+            discordMessage(msg,ALERT_CHANNEL_ID)              
             raise
         else:
             shutil.move(os.path.join(audiof.tmpPath,audiof.wavTag), audiof.wavPath)
             shutil.move(os.path.join(audiof.tmpPath,audiof.mp3Tag), audiof.mp3Path)
             if logging.root.level <= 10:
                 msg = (f'Uploading {audiof.mp3Tag} now.')
-                discordMessage(msg,958901182351417354)
+                discordMessage(msg,ALERT_CHANNEL_ID)
         
         for tmpfile in chunkList:
             os.remove(os.path.join(audiof.tmpPath,tmpfile))
@@ -99,12 +102,12 @@ def main(argv):
         except Exception as e:
             logging.warning(e)
             msg = (f'Oops...something went wrong UPLOADING {audiof.mp3Tag}.')
-            discordMessage(msg,958901182351417354)
+            discordMessage(msg,ALERT_CHANNEL_ID)
             s.deleteFile()
             raise
         else:
             msg = (f'Oh Snap! @everyone New music!\n {audiof.mp3Tag.replace(".mp3","")}\n was just uploaded.')
-            discordMessage(msg,565726777138479104)
+            discordMessage(msg,PUBLISH_CHANNEL_ID)
     else:
         logging.info(f"{audiof.mp3Tag} is already uploaded to the site. Skipping upload.")
 
@@ -117,7 +120,7 @@ def main(argv):
         except Exception as e:
             logging.error(e)
             msg = (f'Oops...something went wrong BACKING UP {audiof.mp3Tag}.')
-            discordMessage(msg,958901182351417354)
+            discordMessage(msg,ALERT_CHANNEL_ID)
             raise
         else:
             try:
@@ -125,7 +128,7 @@ def main(argv):
             except Exception as e:
                 logging.error(e)
                 msg = (f'Oops...unable to delete source {file}.')
-                discordMessage(msg,958901182351417354)
+                discordMessage(msg,ALERT_CHANNEL_ID)
     else:
         logging.info(f"{audiof.mp3Tag} is already backed up.")
                           
@@ -133,7 +136,7 @@ def main(argv):
     msg = f'Completed filePrep on {file}: {date}'
     logging.info(msg)
     if logging.root.level <= 10:
-        discordMessage(msg,958901182351417354)  
+        discordMessage(msg,ALERT_CHANNEL_ID)  
 
 if __name__ == "__main__":
     main(sys.argv[1:])

@@ -7,7 +7,8 @@ from six.moves.configparser import RawConfigParser
 config = RawConfigParser()
 config.read(f'{os.getcwd()}/settings.conf')
 
-TOKEN = config.get('NewMusicBot','token')
+TOKEN = config.get('NewMusicBot', 'token')
+ALERT_CHANNEL_ID = config.getint('NewMusicBot', 'alertChannelId')
 client = discord.Client()
 
 @client.event
@@ -25,7 +26,7 @@ async def on_error(event, *args, **kwargs):
             msg = (time +'Unhandled message: '+ str(args[0]) +'\n')
             f.write(msg)
 
-            channel = client.get_channel(958901182351417354)
+            channel = client.get_channel(ALERT_CHANNEL_ID)
             await channel.send(msg)
             await client.close()
         
@@ -33,7 +34,7 @@ async def on_error(event, *args, **kwargs):
             n = datetime.datetime.now()
             time = n.strftime("[%Y-%m%d %H:%M%S]")
             msg = (str(time) + str(event))
-            channel = client.get_channel(958901182351417354)
+            channel = client.get_channel(ALERT_CHANNEL_ID)
             await channel.send(msg)
             await client.close()
 

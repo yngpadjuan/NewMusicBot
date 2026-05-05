@@ -1,0 +1,31 @@
+[NewMusicBot]
+token = #discord bot token
+loglevel = INFO
+location = basement #location of the music, either basement or gigs
+alertChannelId = #discord channel id for alerts                                                                                                                                                                                                 
+publishChannelId = #discord channel id for publishing new music
+
+[basement]
+sessionname = Basement Bar
+sdfolder = /STEREO/FOLDER01 #path to source folder on sd card
+srcfolder = #path to source folder on local machine
+destfolder = #path to destination folder on local machine
+backupfolder = #path to backup folder on local machine
+ftpfolder = #path to ftp folder on server
+reffile = #path to reference file on local machine
+
+[gigs]
+sessionname = Conifock
+sdfolder = /STEREO/FOLDER01 #path to source folder on sd card
+srcfolder =  #path to source folder on local machine
+destfolder =  #path to destination folder on local machine
+backupfolder =  #path to backup folder on local machine
+ftpfolder =  #path to ftp folder on server
+reffile =  #path to reference file on local machine
+
+[music]
+srcfolder = #path to source folder on local machine
+destfolder = #path to destination folder on local machine
+backupfolder = #path to backup folder on local machine
+ftpfolder = #path to ftp folder on server
+reffile = #path to reference file on local machine

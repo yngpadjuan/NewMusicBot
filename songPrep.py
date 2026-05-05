@@ -5,13 +5,16 @@ import random
 import logging
 from pathlib import Path
 from subprocess import call
-from six.moves.configparser import RawConfigParser
+from configparser import RawConfigParser
 
 from fileTasks import filePrep
 from serverConnect import serverConnect
 
 config = RawConfigParser()
 config.read(f'{os.getcwd()}/settings.conf')
+
+ALERT_CHANNEL_ID = config.getint('NewMusicBot', 'alertChannelId')
+PUBLISH_CHANNEL_ID = config.getint('NewMusicBot', 'publishChannelId')
 
 numeric_level = getattr(logging, config.get('NewMusicBot','logLevel').upper(), None)
 logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
@@ -64,7 +67,7 @@ def main(argv):
     ftp_dest = config.get('music','ftpfolder')
 
     if not os.path.exists(dest_loc):
-        discordMessage('Failed to mount music disk! Exiting.',958901182351417354)
+        discordMessage('Failed to mount music disk! Exiting.',ALERT_CHANNEL_ID)
         sys.exit(1)
 
     Path(dest_loc).mkdir(parents=True, exist_ok=True)
@@ -85,7 +88,7 @@ def main(argv):
         except Exception as e:
             logging.error(e)
             msg = (f'Oops...something went wrong MASTERING {songName}.')
-            discordMessage(msg,958901182351417354)
+            discordMessage(msg,ALERT_CHANNEL_ID)
             raise
         else:
             shutil.move(f"{audiof.tmpPath}/{songName}.mp3", dest_loc)
@@ -103,7 +106,7 @@ def main(argv):
         except Exception as e:
             logging.warning(e)
             msg = (f'Oops...something went wrong UPLOADING {songName}.')
-            discordMessage(msg,958901182351417354)
+            discordMessage(msg,ALERT_CHANNEL_ID)
             s.deleteFile()
             raise
         else:
@@ -111,7 +114,7 @@ def main(argv):
             discordMessage(msg,565687695507193878)
     else:
         msg = (f'Oops... {songName} already exists. Not continuing.')
-        discordMessage(msg,958901182351417354)
+        discordMessage(msg,ALERT_CHANNEL_ID)
 
     if not Path(f"{backup_loc}/{songName}.mp3").exists():
         try:

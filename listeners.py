@@ -19,7 +19,8 @@ logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
                     filename='/var/log/WAVfilePrep/filePrep.log', level=logging.WARN,
                     datefmt='%Y-%m-%d %H:%M:%S')
 
-TOKEN = config.get('NewMusicBot','token')
+TOKEN = config.get('NewMusicBot', 'token')
+ALERT_CHANNEL_ID = config.getint('NewMusicBot', 'alertChannelId')
 
 bot = commands.Bot(command_prefix="!")
 q = queue.Queue()
@@ -37,7 +38,7 @@ def worker():
                     #if not e.returncode == -15 or e.returncode == -9:
                     msg = (f"Error processing {file[1]}: Code {e.returncode}.")
                     logging.error(msg)
-                    subprocess.call(['sh','/home/pi/Music/BoxMusic/DiscordMusicAlert.sh',f'{msg}','958901182351417354'])
+                    subprocess.call(['sh','/home/pi/Music/BoxMusic/DiscordMusicAlert.sh',f'{msg}',str(ALERT_CHANNEL_ID)])
                     for filename in os.listdir(r'/home/pi/Music/BoxMusic/tmp'):
                         file_path = os.path.join(r'/home/pi/Music/BoxMusic/tmp', filename)
                         os.remove(file_path)                    
@@ -49,7 +50,7 @@ def worker():
                     #     elif e.returncode == -9:
                     #         msg = (f"OOM killed process. File probably too big. Not retrying.")
                     #         logging.error(msg)
-                    #         subprocess.call(['sh','/home/pi/Music/BoxMusic/DiscordMusicAlert.sh',f'{msg}','958901182351417354']) 
+                    #         subprocess.call(['sh','/home/pi/Music/BoxMusic/DiscordMusicAlert.sh',f'{msg}',str(ALERT_CHANNEL_ID)]) 
 
             elif file[0] == "publishSong":
                 try:
@@ -57,10 +58,10 @@ def worker():
                 except subprocess.CalledProcessError as e:
                     msg = (f"Error processing {file[1]}: Code{e.returncode}.")
                     logging.error(msg)
-                    subprocess.call(['sh','/home/pi/Music/BoxMusic/DiscordMusicAlert.sh',f'{msg}','958901182351417354'])
+                    subprocess.call(['sh','/home/pi/Music/BoxMusic/DiscordMusicAlert.sh',f'{msg}',str(ALERT_CHANNEL_ID)])
         except Exception as e:
             logging.error(e)
-            subprocess.call(['sh','/home/pi/Music/BoxMusic/DiscordMusicAlert.sh',f'{e}','958901182351417354'])
+            subprocess.call(['sh','/home/pi/Music/BoxMusic/DiscordMusicAlert.sh',f'{e}',str(ALERT_CHANNEL_ID)])
 
 
 def filePrep(device):
@@ -94,7 +95,7 @@ def filePrep(device):
             msg = (f'Unable to find audio tracks in SD card.')
             logging.info(msg)
             if logging.root.level <= 20:
-                subprocess.call(['sh','/home/pi/Music/BoxMusic/DiscordMusicAlert.sh',f'{msg}','958901182351417354'])
+                subprocess.call(['sh','/home/pi/Music/BoxMusic/DiscordMusicAlert.sh',f'{msg}',str(ALERT_CHANNEL_ID)])
                 
             
 def uDevListener():
@@ -105,7 +106,7 @@ def uDevListener():
     observer = MonitorObserver(monitor, callback=filePrep, name='monitor-observer')
 
     observer.start()
-    subprocess.call(['sh','/home/pi/Music/BoxMusic/DiscordMusicAlert.sh','NewMusicBot is ready','958901182351417354'])
+    subprocess.call(['sh','/home/pi/Music/BoxMusic/DiscordMusicAlert.sh','NewMusicBot is ready',str(ALERT_CHANNEL_ID)])
     observer.join()
 
 
