@@ -1,31 +1,38 @@
 [NewMusicBot]
-token = #discord bot token
-loglevel = INFO
-location = basement #location of the music, either basement or gigs
-alertChannelId = #discord channel id for alerts                                                                                                                                                                                                 
-publishChannelId = #discord channel id for publishing new music
+token =                    # Discord bot token
+logLevel = INFO            # DEBUG | INFO | WARN | ERROR
+location = basement        # Active location: basement | gigs | music
+alertChannelId =           # Discord channel ID for ops/error alerts
+publishChannelId =         # Discord channel ID for public song announcements
+watchFolder =              # Folder to watch for new wav files (non-Linux / no SD card)
+artist =                   # MP3 ID3 artist tag
+album =                    # MP3 ID3 album tag
+archiveFolder =            # Root folder containing year/wav subdirectories (used by !publish)
+localDestination =         # Local destination for websiteDownload.py downloads
+backupDest1 =              # First backup destination for backup.py
+backupDest2 =              # Second backup destination for backup.py (optional)
 
 [basement]
-sessionname = Basement Bar
-sdfolder = /STEREO/FOLDER01 #path to source folder on sd card
-srcfolder = #path to source folder on local machine
-destfolder = #path to destination folder on local machine
-backupfolder = #path to backup folder on local machine
-ftpfolder = #path to ftp folder on server
-reffile = #path to reference file on local machine
+sessionName = Basement Bar
+sdfolder = /STEREO/FOLDER01  # Path to source folder on SD card
+srcFolder =                  # Path to source folder on local machine
+destFolder =                 # Path to destination folder on local machine
+backupFolder =               # Path to backup folder on local machine
+ftpFolder =                  # Path to destination folder on FTP server
+refFile =                    # Path to mastering reference file
 
 [gigs]
-sessionname = Conifock
-sdfolder = /STEREO/FOLDER01 #path to source folder on sd card
-srcfolder =  #path to source folder on local machine
-destfolder =  #path to destination folder on local machine
-backupfolder =  #path to backup folder on local machine
-ftpfolder =  #path to ftp folder on server
-reffile =  #path to reference file on local machine
+sessionName = Conifock
+sdfolder = /STEREO/FOLDER01
+srcFolder =
+destFolder =
+backupFolder =
+ftpFolder =
+refFile =
 
 [music]
-srcfolder = #path to source folder on local machine
-destfolder = #path to destination folder on local machine
-backupfolder = #path to backup folder on local machine
-ftpfolder = #path to ftp folder on server
-reffile = #path to reference file on local machine
+srcFolder =
+destFolder =
+backupFolder =
+ftpFolder =
+refFile =
