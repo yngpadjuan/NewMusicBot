@@ -1,9 +1,8 @@
 import os
-import six
 import ftplib
 import logging
 import threading
-from six.moves.configparser import RawConfigParser
+from configparser import RawConfigParser
 
 
 config = RawConfigParser()
@@ -45,11 +44,10 @@ class serverConnect:
         credentials = RawConfigParser(defaults=default_profile)
         credentials.read(credential_search_path)
 
-        for k, v in six.iteritems(default_profile):
-            self.server_ip = credentials.get("default","ip")
-            self.username = credentials.get("default","user")
-            self.api_key = credentials.get("default","key")
-            self.ssl_verify = credentials.get("default","ssl_verify")
+        self.server_ip = credentials.get("default", "ip")
+        self.username = credentials.get("default", "user")
+        self.api_key = credentials.get("default", "key")
+        self.ssl_verify = credentials.get("default", "ssl_verify")
 
     def Upload(self):
         
@@ -67,7 +65,7 @@ class serverConnect:
                         logging.error(e)
                         return
 
-                    p, f = os.path.split(self.file)
+                    _, f = os.path.split(self.file)
 
                     with self._size_lock:
                         resume_from = self.size_written
