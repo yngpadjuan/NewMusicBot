@@ -19,7 +19,7 @@ TOKEN = config.get('NewMusicBot', 'token')
 
 _SDCARD_MODULE = [sys.executable, '-m', 'src.SDCardPrep']
 _SONG_MODULE   = [sys.executable, '-m', 'src.songPrep']
-_ALERT_MODULE  = str(HOME / 'src' / 'DiscordMusicAlert.py')
+_ALERT_MODULE  = 'src.DiscordMusicAlert'
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -32,8 +32,8 @@ q: queue.Queue = queue.Queue()
 def _discord_alert(message: str):
     try:
         subprocess.run(
-            [sys.executable, _ALERT_MODULE, str(ALERT_CHANNEL_ID), message],
-            check=False,
+            [sys.executable, '-m', _ALERT_MODULE, str(ALERT_CHANNEL_ID), message],
+            check=False, cwd=str(HOME),
         )
     except Exception as e:
         log.error(e)
