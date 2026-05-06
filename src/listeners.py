@@ -114,9 +114,6 @@ def _udev_listener():
                     _discord_alert(msg)
             else:
                 log.warning(f'No candidate path found. UUID={device.get("ID_FS_UUID")} USER={os.getenv("USER")}')
-                msg = 'Unable to find audio tracks in SD card.'
-                log.info(msg)
-                _discord_alert(msg)
 
     ctx = Context()
     monitor = Monitor.from_netlink(ctx)
