@@ -3,6 +3,7 @@
 *.pyc
 *.wav
 *.conf
+*.credentials
 
 # Directories #
 ###############
