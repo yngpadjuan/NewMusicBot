@@ -10,12 +10,12 @@ from .serverConnect import serverConnect
 from .paths import get_config, get_logger, ALERT_CHANNEL_ID, PUBLISH_CHANNEL_ID, HOME
 
 log = get_logger(__name__)
-_ALERT_MODULE = str(HOME / 'src' / 'DiscordMusicAlert.py')
+_ALERT_MODULE = 'src.DiscordMusicAlert'
 
 
 def discordMessage(message, channel_id):
     try:
-        sp_run([sys.executable, _ALERT_MODULE, str(channel_id), message], check=False)
+        sp_run([sys.executable, '-m', _ALERT_MODULE, str(channel_id), message], check=False, cwd=str(HOME))
     except Exception as e:
         log.error(e)
 

@@ -96,15 +96,24 @@ def _udev_listener():
                 Path(f"/media/{os.getenv('USER', 'pi')}/{device.get('ID_FS_UUID')}") / sd_subfolder.lstrip('/'),
                 Path('/media') / os.getenv('USER', 'pi') / 'H4N_SD' / sd_subfolder.lstrip('/'),
             ]
+            for c in candidates:
+                log.debug(f'Checking candidate: {c} (exists={c.exists()})')
             src_folder = next((c for c in candidates if c.exists()), None)
             if src_folder:
                 log.info(f'Source folder: {src_folder}')
+                wav_found = False
                 for dirpath, _, filenames in os.walk(src_folder):
                     if dirpath == str(src_folder):
                         for fname in filenames:
                             if fname.endswith('.wav'):
+                                wav_found = True
                                 _enqueue_wav(os.path.join(dirpath, fname))
+                if not wav_found:
+                    msg = 'Unable to find audio tracks in SD card.'
+                    log.info(msg)
+                    _discord_alert(msg)
             else:
+                log.warning(f'No candidate path found. UUID={device.get("ID_FS_UUID")} USER={os.getenv("USER")}')
                 msg = 'Unable to find audio tracks in SD card.'
                 log.info(msg)
                 _discord_alert(msg)
