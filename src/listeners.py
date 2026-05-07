@@ -7,7 +7,7 @@ from pathlib import Path
 import discord
 from discord.ext import commands
 
-from .paths import get_config, get_logger, TMP_DIR, ALERT_CHANNEL_ID
+from .paths import get_config, get_logger, ALERT_CHANNEL_ID
 from .ui import register_commands
 from .songPrep import main as song_prep_main
 from .DiscordMusicAlert import send as _discord_send

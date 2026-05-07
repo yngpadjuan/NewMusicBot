@@ -65,17 +65,18 @@ class filePrep():
         log.info('Chunking the large audio file.')
         segment_seconds = str(self.audio_max_chunk_length_minutes * 60)
         src = os.path.join(self.tmpPath, self.wavTag)
+        chunk_pattern = os.path.join(self.tmpPath, f'tmp_{self.sessionName}_%03d.wav')
         try:
             check_call([
                 'ffmpeg', '-y', '-i', src,
                 '-v', 'quiet', '-c:a', 'copy',
                 '-f', 'segment', '-segment_time', segment_seconds,
-                os.path.join(self.tmpPath, 'tmp_%03d.wav'),
+                chunk_pattern,
             ])
         except CalledProcessError as e:
             log.error(e)
             raise
-        chunk_list = sorted(glob.glob(os.path.join(self.tmpPath, 'tmp_*.wav')))
+        chunk_list = sorted(glob.glob(os.path.join(self.tmpPath, f'tmp_{self.sessionName}_*.wav')))
         return chunk_list
 
     def masterAudio(self, chunk_name):
@@ -124,7 +125,7 @@ class filePrep():
     def mergingChunks(self, chunk_list):
         out = os.path.join(self.tmpPath, f'{self.wavTag}.tmp')
         log.info(f'Merging chunk list to {out}')
-        tmp_list = os.path.join(self.tmpPath, 'tmp_file_inv.txt')
+        tmp_list = os.path.join(self.tmpPath, f'tmp_{self.sessionName}_file_inv.txt')
         with open(tmp_list, 'w') as fh:
             for item in chunk_list:
                 fh.write(f"file '{item}'\n")
@@ -160,6 +161,21 @@ class filePrep():
             raise
         os.replace(trimmed, src)
 
+    def cleanup(self):
+        patterns = [
+            f'tmp_{self.sessionName}_*.wav',
+            f'tmp_{self.sessionName}.trim.wav',
+            f'tmp_{self.sessionName}_file_inv.txt',
+            f'{self.wavTag}.tmp',
+        ]
+        for pattern in patterns:
+            for f in glob.glob(os.path.join(self.tmpPath, pattern)):
+                try:
+                    os.remove(f)
+                    log.debug(f'Cleaned up: {f}')
+                except OSError as e:
+                    log.warning(f'Could not remove {f}: {e}')
+
     def _read_wordfile(self, path):
         with open(path) as fh:
             words = [line.strip() for line in fh if line.strip()]
@@ -172,14 +188,14 @@ class filePrep():
     
 
 def process_track(filePrepObject):
-    
-    if filePrepObject.start_time and filePrepObject.end_time:
-        filePrepObject.segmentAudio()
-    
-    chunkList = []
-    chunkList = filePrepObject.fileChunk()
-    for chunk in chunkList:
-        filePrepObject.masterAudio(chunk)
-    filePrepObject.mergingChunks(chunkList)
+    try:
+        if filePrepObject.start_time and filePrepObject.end_time:
+            filePrepObject.segmentAudio()
 
-    filePrepObject.convertToMP3()
+        chunkList = filePrepObject.fileChunk()
+        for chunk in chunkList:
+            filePrepObject.masterAudio(chunk)
+        filePrepObject.mergingChunks(chunkList)
+        filePrepObject.convertToMP3()
+    finally:
+        filePrepObject.cleanup()
