@@ -163,7 +163,6 @@ class filePrep():
 
     def cleanup(self):
         patterns = [
-            f'{self.sessionName}.wav',
             f'tmp_{self.sessionName}_*.wav',
             f'tmp_{self.sessionName}.trim.wav',
             f'tmp_{self.sessionName}_file_inv.txt',
@@ -198,7 +197,6 @@ def process_track(filePrepObject):
             filePrepObject.masterAudio(chunk)
         filePrepObject.mergingChunks(chunkList)
         filePrepObject.convertToMP3()
-    except Exception as e:
-        log.error(e)
+    finally:
         filePrepObject.cleanup()
-        raise
+
