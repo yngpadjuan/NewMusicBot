@@ -60,7 +60,7 @@ class PublishModal(discord.ui.Modal, title='Publish Song'):
         song      = self.filename.value.strip()
         start_raw = self.start_time.value.strip()
         stop_raw  = self.stop_time.value.strip()
-        title     = self.song_title.value.strip() or 'None'
+        title     = self.song_title.value.strip() or None
 
         try:
             start_dt = datetime.strptime(start_raw, '%H:%M:%S')
@@ -97,7 +97,7 @@ class PublishModal(discord.ui.Modal, title='Publish Song'):
             )
             return
 
-        song_loc = config.get('NewMusicBot', 'archiveFolder', fallback='') + f'/{year_match[0]}/wav'
+        song_loc = config.get('DEFAULT', 'srcFolder', fallback='') + f'/{year_match[0]}/wav'
         file = ''
         for candidate in (Path(song_loc) / song, Path(song_loc) / (song + '.wav')):
             if candidate.exists():
@@ -111,7 +111,7 @@ class PublishModal(discord.ui.Modal, title='Publish Song'):
             )
             return
 
-        self._queue.put(['publishSong', file, start, stop, title])
+        self._queue.put([file, 'DEFAULT', start, stop, title])
         await interaction.response.send_message(embed=ok_embed(
             '✅ Queued for publishing',
             f'**File:** `{song}`\n**Start:** {start_raw}  **Stop:** {stop_raw}\n**Title:** {title}',
@@ -144,37 +144,10 @@ class SessionNameModal(discord.ui.Modal, title='Set Session Name'):
 
 # ── Select views ──────────────────────────────────────────────────────────────
 
-class LocationSelect(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=60)
-        current = config.get('NewMusicBot', 'location', fallback='basement')
-        options = [
-            discord.SelectOption(label='basement', description='Basement recordings',
-                                 emoji='🏠', default=(current == 'basement')),
-            discord.SelectOption(label='gigs',     description='Live gig recordings',
-                                 emoji='🎸', default=(current == 'gigs')),
-            discord.SelectOption(label='music',    description='Music files',
-                                 emoji='🎵', default=(current == 'music')),
-        ]
-        self.select = discord.ui.Select(placeholder='Choose a location…', options=options)
-        self.select.callback = self._on_select
-        self.add_item(self.select)
-
-    async def _on_select(self, interaction: discord.Interaction):
-        location = self.select.values[0]
-        config.set('NewMusicBot', 'location', location)
-        with open(CONFIG_PATH, 'w') as f:
-            config.write(f)
-        await interaction.response.edit_message(
-            embed=ok_embed('Location updated', f'Active location is now **{location}**.'),
-            view=None,
-        )
-
-
 class LogLevelSelect(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=60)
-        current = config.get('NewMusicBot', 'logLevel', fallback='INFO').upper()
+        current = config.get('DEFAULT', 'logLevel', fallback='INFO').upper()
         options = [
             discord.SelectOption(label=lvl, default=(current == lvl))
             for lvl in ('DEBUG', 'INFO', 'WARN', 'ERROR')
@@ -185,7 +158,7 @@ class LogLevelSelect(discord.ui.View):
 
     async def _on_select(self, interaction: discord.Interaction):
         level = self.select.values[0]
-        config.set('NewMusicBot', 'logLevel', level)
+        config.set('DEFAULT', 'logLevel', level)
         with open(CONFIG_PATH, 'w') as config_file:
             config.write(config_file)
         await interaction.response.edit_message(
@@ -201,70 +174,37 @@ def register_commands(bot: commands.Bot, q) -> None:
 
     # Give PublishModal access to the queue without making it a global.
     PublishModal._queue = q
+    locations = {}
+    for location in config.sections():
+        session_name = config.get(location, 'sessionName', fallback='<unset>')
+        locations[location] = session_name
+    location_choices = [app_commands.Choice(name=f"{loc} ({sesh})", value=loc) for loc, sesh in locations.items()]
 
     @bot.tree.command(name='publish', description='Segment, master, and publish a recording')
     @app_commands.checks.has_role('songadmin')
     async def slash_publish(interaction: discord.Interaction):
         await interaction.response.send_modal(PublishModal())
 
-    @bot.tree.command(name='set_location', description='Switch the active recording location')
-    @app_commands.checks.has_role('songadmin')
-    async def slash_set_location(interaction: discord.Interaction):
-        current = config.get('NewMusicBot', 'location', fallback='basement')
-        await interaction.response.send_message(
-            embed=info_embed('Set Location', f'Current location: **{current}**'),
-            view=LocationSelect(),
-            ephemeral=True,
-        )
-
-    @bot.tree.command(name='get_location', description='Show the current active location')
-    @app_commands.checks.has_role('songadmin')
-    async def slash_get_location(interaction: discord.Interaction):
-        location = config.get('NewMusicBot', 'location', fallback='—')
-        await interaction.response.send_message(
-            embed=info_embed('Current Location', f'**{location}**'), ephemeral=True,
-        )
 
     @bot.tree.command(name='set_session_name', description='Update the session label for a location')
     @app_commands.checks.has_role('songadmin')
     @app_commands.describe(location='Location to update (basement or gigs)')
-    @app_commands.choices(location=[
-        app_commands.Choice(name='basement', value='basement'),
-        app_commands.Choice(name='gigs',     value='gigs'),
-    ])
+    @app_commands.choices(location=location_choices)
     async def slash_set_session_name(interaction: discord.Interaction, location: str):
         await interaction.response.send_modal(SessionNameModal(location))
 
-    @bot.tree.command(name='get_session_name', description='Show the session label for a location')
-    @app_commands.checks.has_role('songadmin')
-    @app_commands.describe(location='Location to query')
-    @app_commands.choices(location=[
-        app_commands.Choice(name='basement', value='basement'),
-        app_commands.Choice(name='gigs',     value='gigs'),
-    ])
-    async def slash_get_session_name(interaction: discord.Interaction, location: str):
-        name = config.get(location, 'sessionName', fallback='—')
-        await interaction.response.send_message(
-            embed=info_embed(f'Session name — {location}', f'**{name}**'), ephemeral=True,
-        )
+
 
     @bot.tree.command(name='set_logging_level', description='Change the bot log verbosity')
     @app_commands.checks.has_role('Final Boss')
     async def slash_set_logging_level(interaction: discord.Interaction):
-        current = config.get('NewMusicBot', 'logLevel', fallback='INFO').upper()
+        current = config.get('DEFAULT', 'logLevel', fallback='INFO').upper()
         await interaction.response.send_message(
             embed=info_embed('Set Log Level', f'Current level: **{current}**'),
             view=LogLevelSelect(),
             ephemeral=True,
         )
 
-    @bot.tree.command(name='get_logging_level', description='Show the current log level')
-    @app_commands.checks.has_role('Final Boss')
-    async def slash_get_logging_level(interaction: discord.Interaction):
-        level = config.get('NewMusicBot', 'logLevel', fallback='—')
-        await interaction.response.send_message(
-            embed=info_embed('Current Log Level', f'**{level}**'), ephemeral=True,
-        )
 
     @bot.tree.error
     async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):

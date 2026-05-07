@@ -4,7 +4,7 @@ A Discord bot that watches for new audio recordings, masters them via [Matcherin
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.9+
 - [ffmpeg](https://ffmpeg.org/) in `PATH`
 - A Discord bot token with message and guild permissions
 
@@ -28,7 +28,7 @@ The installer will:
 ```bash
 export NEWMUSICBOT_HOME=/path/to/install
 mkdir -p $NEWMUSICBOT_HOME/{tmp,logs}
-cp -r src scripts wordlists serviceFiles settings.conf.example $NEWMUSICBOT_HOME/
+cp -r src scripts wordlists settings.conf.example $NEWMUSICBOT_HOME/
 cp settings.conf.example $NEWMUSICBOT_HOME/settings.conf  # then edit it
 pip install -r requirements.txt
 # Linux only:
@@ -44,32 +44,36 @@ python $NEWMUSICBOT_HOME/scripts/run.py
 
 ## `settings.conf` reference
 
-All keys live under `[NewMusicBot]` unless noted.
+Keys under `[DEFAULT]` apply globally and are inherited by every location section.
+Comments must be on their own lines — inline `#` comments are not supported by the config parser.
+
+### `[DEFAULT]` section
 
 | Key | Required | Description |
 |---|---|---|
 | `token` | Yes | Discord bot token |
 | `logLevel` | No | `DEBUG` / `INFO` / `WARN` / `ERROR` (default: `INFO`) |
-| `location` | Yes | Active location section: `basement`, `gigs`, or `music` |
 | `alertChannelId` | Yes | Discord channel ID for ops/error alerts |
 | `publishChannelId` | Yes | Discord channel ID for public song announcements |
-| `watchFolder` | Linux fallback / non-Linux | Directory to watch for new `.wav` files via watchdog |
 | `artist` | No | MP3 ID3 artist tag |
 | `album` | No | MP3 ID3 album tag |
-| `archiveFolder` | Yes for `!publish` | Root directory containing `{year}/wav/` subdirs |
-| `localDestination` | Yes for websiteDownload | Local path for FTP downloads |
-| `backupDest1` | No | First backup destination for `scripts/backup.py` |
-| `backupDest2` | No | Second backup destination for `scripts/backup.py` |
+| `mountPoint` | Linux fallback / non-Linux | Directory watched for new `.wav` files (watchdog) and SD card mount root (udev) |
+| `srcFolder` | Yes for `/publish` | Root directory containing `{year}/wav/` subdirs used to locate archive files |
+| `destFolder` | Yes | Default destination for processed MP3s (used by publish flow) |
+| `backupFolder` | Yes | Default backup destination |
+| `ftpFolder` | Yes | Default FTP destination path |
+| `refFile` | Yes | Absolute path to the Matchering reference track |
 
-Per-location sections (`[basement]`, `[gigs]`, `[music]`):
+### Per-location sections (`[basement]`, `[gigs]`, etc.)
+
+Each location section overrides any `[DEFAULT]` keys it defines. `sessionName` and `subFolder` are location-specific and have no default.
 
 | Key | Description |
 |---|---|
 | `sessionName` | Label used in output filenames and Discord messages |
-| `sdfolder` | Subfolder path on the SD card (e.g. `/STEREO/FOLDER01`) |
-| `srcFolder` | Source folder on the local machine |
-| `destFolder` | Destination folder on the local machine (year appended automatically) |
-| `backupFolder` | Backup folder on the local machine (year appended automatically) |
+| `subFolder` | Subfolder path on the SD card (e.g. `/STEREO/FOLDER01`) |
+| `destFolder` | Destination folder (year appended automatically for archival flow) |
+| `backupFolder` | Backup folder (year appended automatically for archival flow) |
 | `ftpFolder` | Destination path on the FTP server |
 | `refFile` | Absolute path to the Matchering reference track |
 
@@ -89,22 +93,18 @@ ssl_verify = false
 
 | Platform | Backend | How it works |
 |---|---|---|
-| Linux (with `pyudev`) | udev | Detects SD card insertion via kernel events. Mount point resolved from `ID_FS_UUID` or the `H4N_SD` volume label. |
-| Linux (without `pyudev`) / macOS / Windows | watchdog | Polls `watchFolder` from `settings.conf` for new `.wav` files. |
+| Linux (with `pyudev`) | udev | Detects SD card insertion via kernel events. Iterates config sections to find a matching `subFolder` under `mountPoint`. |
+| Linux (without `pyudev`) / macOS / Windows | watchdog | Polls `mountPoint` from `settings.conf` for new `.wav` files. |
 
-## Discord bot commands
+## Discord slash commands
 
 All commands require the `songadmin` role unless noted.
 
 | Command | Description |
 |---|---|
-| `!publish <file> <start> <stop> [title]` | Segment, master, and publish a recording. Times in `HH:MM:SS`. |
-| `!set_location <basement\|gigs\|music>` | Switch the active location. |
-| `!get_location` | Show the current location. |
-| `!set_session_name <location> <name>` | Update the session label for a location. |
-| `!get_session_name <location>` | Show the session label. |
-| `!set_logging_level <level>` | Change log verbosity (`Final Boss` role required). |
-| `!get_logging_level` | Show current log level (`Final Boss` role required). |
+| `/publish` | Opens a modal to segment, master, and publish a recording from the archive. Times in `HH:MM:SS`. |
+| `/set_session_name` | Update the session label for a location. |
+| `/set_logging_level` | Change log verbosity (`Final Boss` role required). |
 
 ## Backup
 
@@ -112,7 +112,7 @@ All commands require the `songadmin` role unless noted.
 python scripts/backup.py
 ```
 
-Copies `src/`, `scripts/`, `wordlists/`, `serviceFiles/`, and `settings.conf.example` to the paths in `backupDest1` / `backupDest2`. **`settings.conf` and `server.credentials` are never copied.**
+Copies `src/`, `scripts/`, `wordlists/`, and `settings.conf.example` to the paths configured in `backupDest1` / `backupDest2` under `[DEFAULT]`. **`settings.conf` and `server.credentials` are never copied.**
 
 ## Smoke test
 

@@ -33,7 +33,7 @@ def get_config() -> RawConfigParser:
 
 def get_logger(name: str) -> logging.Logger:
     config = get_config()
-    level_name = config.get('NewMusicBot', 'logLevel', fallback='INFO').upper()
+    level_name = config.get('DEFAULT', 'logLevel', fallback='INFO').upper()
     level = getattr(logging, level_name, logging.INFO)
 
     logger = logging.getLogger(name)
@@ -54,9 +54,11 @@ def get_logger(name: str) -> logging.Logger:
 
 def _get_channel_id(key: str) -> int:
     try:
-        return get_config().getint('NewMusicBot', key)
+        return get_config().getint('DEFAULT', key)
     except Exception:
-        return 0
+        log = get_logger(__name__)
+        log.error(f'Error retrieving {key} from config. Please ensure it is set and valid.')
+        raise
 
 
 ALERT_CHANNEL_ID: int = _get_channel_id('alertChannelId')

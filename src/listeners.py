@@ -1,25 +1,21 @@
 import os
-import sys
 import queue
 import platform
 import threading
-import subprocess
 from pathlib import Path
 
 import discord
 from discord.ext import commands
 
-from .paths import get_config, get_logger, TMP_DIR, ALERT_CHANNEL_ID, HOME
+from .paths import get_config, get_logger, TMP_DIR, ALERT_CHANNEL_ID
 from .ui import register_commands
+from .songPrep import main as song_prep_main
+from .DiscordMusicAlert import send as _discord_send
 
 log = get_logger(__name__)
 config = get_config()
 
-TOKEN = config.get('NewMusicBot', 'token')
-
-_SDCARD_MODULE = [sys.executable, '-m', 'src.SDCardPrep']
-_SONG_MODULE   = [sys.executable, '-m', 'src.songPrep']
-_ALERT_MODULE  = 'src.DiscordMusicAlert'
+TOKEN = config.get('DEFAULT', 'token')
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -31,10 +27,7 @@ q: queue.Queue = queue.Queue()
 
 def _discord_alert(message: str):
     try:
-        subprocess.run(
-            [sys.executable, '-m', _ALERT_MODULE, str(ALERT_CHANNEL_ID), message],
-            check=False, cwd=str(HOME),
-        )
+        _discord_send(ALERT_CHANNEL_ID, message)
     except Exception as e:
         log.error(e)
 
@@ -44,32 +37,15 @@ def _discord_alert(message: str):
 def worker():
     log.info('Queue started.')
     while True:
-        item = q.get()
-        log.info(f'{item} retrieved from queue')
+        file, section, start, end, songName = q.get()
+        log.info(f'{file} retrieved from queue')
         try:
-            if item[0] == 'filePrep':
-                try:
-                    subprocess.run(_SDCARD_MODULE + [item[1]], check=True, cwd=str(HOME))
-                except subprocess.CalledProcessError as e:
-                    msg = f'Error processing {item[1]}: Code {e.returncode}.'
-                    log.error(msg)
-                    _discord_alert(msg)
-                    for fname in os.listdir(TMP_DIR):
-                        try:
-                            os.remove(TMP_DIR / fname)
-                        except Exception:
-                            pass
-
-            elif item[0] == 'publishSong':
-                try:
-                    subprocess.run(
-                        _SONG_MODULE + [item[1], item[2], item[3], item[4]],
-                        check=True, cwd=str(HOME),
-                    )
-                except subprocess.CalledProcessError as e:
-                    msg = f'Error processing {item[1]}: Code {e.returncode}.'
-                    log.error(msg)
-                    _discord_alert(msg)
+            try:
+                song_prep_main(file=file, section=section, start=start, end=end, songName=songName)
+            except Exception as e:
+                msg = f'Error processing {file}: {e}.'
+                log.error(msg)
+                _discord_alert(msg)
         except Exception as e:
             log.error(e)
             _discord_alert(str(e))
@@ -77,43 +53,34 @@ def worker():
 
 # ── Watcher backends ──────────────────────────────────────────────────────────
 
-def _enqueue_wav(filepath: str):
-    log.info(f'Found {filepath}')
-    q.put(['filePrep', filepath])
-
-
 def _udev_listener():
     from pyudev import Context, Monitor, MonitorObserver
-
-    location = config.get('NewMusicBot', 'location')
 
     def on_device_event(device):
         if (device.action in ('change', 'add') and
                 device.get('ID_FS_TYPE') == 'vfat' and
                 device.get('ID_FS_UUID')):
-            sd_subfolder = config.get(location, 'sdfolder')
-            candidates = [
-                Path(f"/media/{os.getenv('USER', 'pi')}/{device.get('ID_FS_UUID')}") / sd_subfolder.lstrip('/'),
-                Path('/media') / os.getenv('USER', 'pi') / 'H4N_SD' / sd_subfolder.lstrip('/'),
-            ]
-            for c in candidates:
-                log.debug(f'Checking candidate: {c} (exists={c.exists()})')
-            src_folder = next((c for c in candidates if c.exists()), None)
-            if src_folder:
-                log.info(f'Source folder: {src_folder}')
-                wav_found = False
-                for dirpath, _, filenames in os.walk(src_folder):
-                    if dirpath == str(src_folder):
-                        for fname in filenames:
-                            if fname.endswith('.wav'):
-                                wav_found = True
-                                _enqueue_wav(os.path.join(dirpath, fname))
-                if not wav_found:
-                    msg = 'Unable to find audio tracks in SD card.'
-                    log.info(msg)
-                    _discord_alert(msg)
-            else:
-                log.warning(f'No candidate path found. UUID={device.get("ID_FS_UUID")} USER={os.getenv("USER")}')
+            #TODO: This is pretty hacky; we should probably store the UUIDs of known devices in the config and match against that instead of blindly checking all candidates for every event.
+            for sections in config.sections():
+                if config.get(sections, 'subFolder', fallback=None):
+                    sd_subfolder = config.get(sections, 'subFolder', fallback='')
+                    candidates = [
+                        Path(f"{config.get('DEFAULT', 'mountPoint', fallback='')}/{device.get('ID_FS_UUID')}{sd_subfolder}"),
+                        Path(f"{config.get('DEFAULT', 'mountPoint', fallback='')}/H4N_SD{sd_subfolder}")
+                    ]                    
+                    for c in candidates:
+                        log.debug(f'Checking candidate: {c} (exists={c.exists()})')
+
+                    src_folder = next((c for c in candidates if c.exists()), None)
+                    if src_folder:
+                        log.info(f'Source folder: {src_folder}')
+                        for dirpath, _, filenames in os.walk(src_folder):
+                            if dirpath == str(src_folder):
+                                for fname in filenames:
+                                    if fname.endswith('.wav'):
+                                        q.put([os.path.join(dirpath, fname), sections, None, None, None])
+                    else:
+                        log.warning(f'No candidate path found. UUID={device.get("ID_FS_UUID")} USER={os.getenv("USER")}')
 
     ctx = Context()
     monitor = Monitor.from_netlink(ctx)
@@ -128,9 +95,9 @@ def _watchdog_listener():
     from watchdog.observers import Observer
     from watchdog.events import FileSystemEventHandler, FileCreatedEvent
 
-    watch_folder = config.get('NewMusicBot', 'watchFolder', fallback='')
+    watch_folder = config.get('DEFAULT', 'mountPoint', fallback='')
     if not watch_folder:
-        log.error('watchFolder not set in settings.conf; watchdog listener cannot start.')
+        log.error('mountPoint not set in settings.conf; watchdog listener cannot start.')
         return
 
     watch_path = Path(watch_folder)
@@ -139,7 +106,7 @@ def _watchdog_listener():
     class _Handler(FileSystemEventHandler):
         def on_created(self, event):
             if isinstance(event, FileCreatedEvent) and event.src_path.endswith('.wav'):
-                _enqueue_wav(event.src_path)
+                q.put([event.src_path, 'DEFAULT', None, None, None])
 
     observer = Observer()
     observer.schedule(_Handler(), str(watch_path), recursive=False)

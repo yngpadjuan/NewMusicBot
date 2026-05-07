@@ -50,20 +50,20 @@ if [ ! -f "${CONF}" ]; then
 [NewMusicBot]
 token = ${BOT_TOKEN}
 logLevel = INFO
-location = ${LOCATION}
 alertChannelId = ${ALERT_CHANNEL}
 publishChannelId = ${PUBLISH_CHANNEL}
-watchFolder = ${WATCH_FOLDER}
 artist = ${ARTIST}
 album = ${ALBUM}
-archiveFolder =
-backupDest1 =
-backupDest2 =
+mountPoint = ${WATCH_FOLDER}
+srcFolder = 
+destFolder =
+backupFolder =
+ftpFolder =
+refFile =
 
 [basement]
 sessionName = Basement Bar
-sdfolder = /STEREO/FOLDER01
-srcFolder =
+subFolder = /STEREO/FOLDER01
 destFolder =
 backupFolder =
 ftpFolder =
@@ -71,19 +71,12 @@ refFile =
 
 [gigs]
 sessionName = Conifock
-sdfolder = /STEREO/FOLDER01
-srcFolder =
+subFolder = /STEREO/FOLDER02
 destFolder =
 backupFolder =
 ftpFolder =
 refFile =
 
-[music]
-srcFolder =
-destFolder =
-backupFolder =
-ftpFolder =
-refFile =
 EOF
     chmod 600 "${CONF}"
     echo "Written: ${CONF}"

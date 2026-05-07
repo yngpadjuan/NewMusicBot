@@ -1,113 +1,136 @@
+import argparse
 import os
 import sys
 import shutil
-import random
-from pathlib import Path
-from subprocess import run as sp_run
+import filecmp
+import time
 
-from .fileTasks import filePrep
+from .fileTasks import filePrep, process_track
 from .serverConnect import serverConnect
-from .paths import get_config, get_logger, ALERT_CHANNEL_ID, PUBLISH_CHANNEL_ID, HOME, WORDLISTS_DIR
+from .paths import get_logger, ALERT_CHANNEL_ID, PUBLISH_CHANNEL_ID
+from .DiscordMusicAlert import send as _discord_send
 
 log = get_logger(__name__)
-_ALERT_MODULE = 'src.DiscordMusicAlert'
 
 
 def discordMessage(message, channel_id):
     try:
-        sp_run([sys.executable, '-m', _ALERT_MODULE, str(channel_id), message], check=False, cwd=str(HOME))
+        _discord_send(channel_id, message)
     except Exception as e:
         log.error(e)
 
 
-def _read_wordfile(path):
-    with open(path) as fh:
-        words = [line.strip() for line in fh if line.strip()]
-    return random.choice(words)
+def main(file, section='DEFAULT', start=None, end=None, songName=None):
+    audiof = filePrep(file=file, section=section, start=start, end=end, songName=songName)
 
-
-def random_name():
-    verb = _read_wordfile(WORDLISTS_DIR / 'verbs.txt')
-    noun = _read_wordfile(WORDLISTS_DIR / 'nouns.txt')
-    return f'{verb.capitalize()} {noun.capitalize()}'
-
-
-def main(argv):
-    file = argv[0]
-    start = argv[1]
-    end = argv[2]
-    songName = argv[3]
-
-    config = get_config()
-    audiof = filePrep()
-
-    dest_loc = config.get('music', 'destFolder')
-    backup_loc = config.get('music', 'backupFolder')
-    ftp_dest = config.get('music', 'ftpFolder')
-
-    if not os.path.exists(dest_loc):
+    #check that file doesn't already exist at destination; if it does, skip to upload step
+    if not os.path.exists(audiof.dest_folder):
         discordMessage('Failed to mount music disk! Exiting.', ALERT_CHANNEL_ID)
         sys.exit(1)
 
-    Path(dest_loc).mkdir(parents=True, exist_ok=True)
-    Path(backup_loc).mkdir(parents=True, exist_ok=True)
+    if not os.path.exists(audiof.backup_folder):
+        discordMessage('Failed to mount backup disk! Exiting.', ALERT_CHANNEL_ID)
+        sys.exit(1)
 
-    if songName == 'None':
-        songName = random_name()
+    if not os.path.isfile(os.path.join(audiof.mp3Path, audiof.mp3Tag)):
+        discordMessage(f'Started the filePrep process on: {audiof.wavTag}', ALERT_CHANNEL_ID)
 
-    if not Path(f'{dest_loc}/{songName}.mp3').exists():
-        chunk_list = []
+        # Check if file already copied to tmp; if not, copy it there. This is a safeguard against the SD card being ejected during processing and losing the source file.
+        tmp_copy = os.path.join(audiof.tmpPath, audiof.wavTag)
+        if os.path.isfile(tmp_copy):
+            log.info(f'{tmp_copy} exists. Checking fidelity.')
+            if not filecmp.cmp(file, tmp_copy):
+                try:
+                    log.info(f'Copying {file} to {audiof.tmpPath}')
+                    shutil.copy(file, tmp_copy)
+                    log.info('Copied successfully.')
+                except Exception as e:
+                    log.error(e)
+                    discordMessage(f'Something went wrong COPYING {e}.', ALERT_CHANNEL_ID)
+            else:
+                log.info(f'{file} already copied from SD Card. Moving on.')
+        else:
+            try:
+                log.info(f'Copying {file} to {audiof.tmpPath}')
+                shutil.copy(file, tmp_copy)
+                log.info('Copied successfully.')
+            except Exception as e:
+                log.error(e)
+                discordMessage(f'Something went wrong COPYING {e}.', ALERT_CHANNEL_ID)
+        
+        #process the file
         try:
-            chunk_list = audiof.segmentAudio(songName, file, start, end)
-            for chunk in chunk_list:
-                audiof.masterAudio(os.path.join(audiof.tmpPath, chunk))
-            audiof.mergingChunks(
-                [os.path.join(audiof.tmpPath, c) for c in chunk_list],
-                out_name=audiof.tmp_master_track,
-            )
-            audiof.convertToMP3(out_name=f'{songName}.mp3')
-            audiof.applyFade(f'{songName}.mp3')
+            process_track(audiof)
         except Exception as e:
             log.error(e)
-            discordMessage(f'Oops...something went wrong MASTERING {songName}.', ALERT_CHANNEL_ID)
+            discordMessage(f'Oops...something went wrong MASTERING {audiof.wavTag}.', ALERT_CHANNEL_ID)
             raise
-        else:
-            shutil.move(f'{audiof.tmpPath}/{songName}.mp3', dest_loc)
 
-        for tmpfile in chunk_list:
-            tmp_path = os.path.join(audiof.tmpPath, tmpfile)
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
-    else:
-        log.info(f'{songName}.mp3 already exists. Skipping to upload.')
-
-    s = serverConnect(f'{os.path.join(dest_loc, songName)}.mp3', ftp_dest)
-    if not s.fileExists():
         try:
-            s.Upload()
+            if audiof.wavPath:
+                shutil.move(os.path.join(audiof.tmpPath, audiof.wavTag), audiof.wavPath)
+            shutil.move(os.path.join(audiof.tmpPath, audiof.mp3Tag), audiof.mp3Path)
         except Exception as e:
-            log.warning(e)
-            discordMessage(f'Oops...something went wrong UPLOADING {songName}.', ALERT_CHANNEL_ID)
-            s.deleteFile()
+            log.error(e)
+
+    else:
+        log.info(f'{audiof.mp3Tag} already exists. Skipping to file upload to server.')
+
+    log.info(f'Uploading {audiof.mp3Tag} now.')
+
+    s = serverConnect(os.path.join(audiof.mp3Path, audiof.mp3Tag), audiof.ftp_folder)
+    if s.fileExists():
+        log.info(f'{audiof.mp3Tag} is already uploaded to the site. Skipping upload.')
+    else:
+        max_retries = 5
+        for attempt in range(1, max_retries + 1):
+            if s.Upload():
+                break
+            if attempt == max_retries:
+                msg = f'Upload failed after {max_retries} attempts: {audiof.mp3Tag}. Giving up.'
+                log.error(msg)
+                discordMessage(msg, ALERT_CHANNEL_ID)
+                raise RuntimeError(msg)
+            wait = 2 ** attempt
+            log.warning(f'Upload attempt {attempt} failed for {audiof.mp3Tag}. Retrying in {wait}s...')
+            time.sleep(wait)
+
+        discordMessage(
+            f'Oh Snap! New music @everyone!\n {audiof.mp3Tag.replace(".mp3", "")}\n was just uploaded.',
+            PUBLISH_CHANNEL_ID,
+        )
+
+    if not os.path.isfile(os.path.join(audiof.backup_folder, audiof.mp3Tag)):
+        try:
+            log.info('Backing up file.')
+            shutil.copy(os.path.join(audiof.mp3Path, audiof.mp3Tag), audiof.backup_folder)
+        except Exception as e:
+            log.error(e)
+            discordMessage(f'Oops...something went wrong BACKING UP {audiof.mp3Tag}.', ALERT_CHANNEL_ID)
             raise
         else:
-            discordMessage(
-                f'@everyone BoX has released a new song!\nCheck out {songName}!',
-                PUBLISH_CHANNEL_ID,
-            )
+            try:
+                if audiof.wavPath:
+                    os.remove(file)
+                else:
+                    os.remove(os.path.join(audiof.tmpPath, audiof.wavTag))
+            except Exception as e:
+                log.error(e)
+                discordMessage(f'Oops...unable to delete source {file}.', ALERT_CHANNEL_ID)
     else:
-        discordMessage(f'Oops... {songName} already exists. Not continuing.', ALERT_CHANNEL_ID)
+        log.info(f'{audiof.mp3Tag} is already backed up.')
 
-    if not Path(f'{backup_loc}/{songName}.mp3').exists():
-        try:
-            shutil.copy(f'{dest_loc}/{songName}.mp3', backup_loc)
-        except Exception:
-            msg = f'Oops...something went wrong BACKING UP {songName} to {backup_loc}.'
-            log.error(msg)
-            raise
-    else:
-        log.info(f'{songName}.mp3 backup already exists.')
+    msg = f'COMPLETED filePrep on {file}'
+    log.info(msg)
 
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    parser = argparse.ArgumentParser(description='Process a song file for publishing.')
+    parser.add_argument('file', help='Path to the source .wav file')
+    parser.add_argument('section', nargs='?', default='DEFAULT', help='Config section to use (default: DEFAULT)')
+    parser.add_argument('start', nargs='?', help='Start time in HH:MM:SS format (optional)')
+    parser.add_argument('end', nargs='?', help='End time in HH:MM:SS format (optional)')
+    parser.add_argument('songName', nargs='?', help='Custom name for the song (optional)')
+    args = parser.parse_args()
+
+    main(file=args.file, section=args.section, start=args.start, end=args.end, songName=args.songName)
