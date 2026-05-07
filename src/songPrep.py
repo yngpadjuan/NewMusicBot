@@ -66,7 +66,7 @@ def main(argv):
                 out_name=audiof.tmp_master_track,
             )
             audiof.convertToMP3(out_name=f'{songName}.mp3')
-            audiof.applyFade(songName)
+            audiof.applyFade(f'{songName}.mp3')
         except Exception as e:
             log.error(e)
             discordMessage(f'Oops...something went wrong MASTERING {songName}.', ALERT_CHANNEL_ID)
