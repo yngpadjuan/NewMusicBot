@@ -24,6 +24,7 @@ class filePrep():
         self.ftp_folder = config.get(self.location, 'ftpFolder')
         self.ref_file = config.get(self.location, 'refFile')
         self.tmpPath = str(TMP_DIR)
+        self.tmp_master_track = 'tmp_master_track.wav'
 
         if file:
             ts = int(os.path.getmtime(file))
@@ -33,7 +34,6 @@ class filePrep():
 
             self.wavTag = f'{date} {self.sessionName}.wav'
             self.mp3Tag = f'{date} {self.sessionName}.mp3'
-            self.tmp_master_track = 'tmp_master_track.wav'
 
             self.dest_folder = config.get(self.location, 'destFolder') + year
             self.backup_folder = config.get(self.location, 'backupFolder') + year
@@ -78,10 +78,11 @@ class filePrep():
             raise
         os.replace(tmp_out, chunk_name)
 
-    def convertToMP3(self):
-        log.info(f'Converting {self.wavTag} to MP3.')
+    def convertToMP3(self, out_name=None):
+        mp3_name = out_name or self.mp3Tag
+        log.info(f'Converting to MP3: {mp3_name}')
         src = os.path.join(self.tmpPath, self.tmp_master_track)
-        dst = os.path.join(self.tmpPath, self.mp3Tag)
+        dst = os.path.join(self.tmpPath, mp3_name)
         try:
             check_call([
                 'ffmpeg', '-v', 'quiet', '-i', src,
@@ -92,8 +93,9 @@ class filePrep():
             raise
         os.remove(src)
 
-    def mergingChunks(self, chunk_list):
-        log.info(f'Merging chunk list to {self.wavTag}')
+    def mergingChunks(self, chunk_list, out_name=None):
+        out = out_name or self.tmp_master_track
+        log.info(f'Merging chunk list to {out}')
         tmp_list = os.path.join(self.tmpPath, 'tmp_file_inv.txt')
         with open(tmp_list, 'w') as fh:
             for item in chunk_list:
@@ -102,7 +104,7 @@ class filePrep():
             check_call([
                 'ffmpeg', '-f', 'concat', '-safe', '0', '-i', tmp_list,
                 '-v', 'quiet', '-c', 'copy',
-                os.path.join(self.tmpPath, self.tmp_master_track),
+                os.path.join(self.tmpPath, out),
             ])
         except CalledProcessError as e:
             log.error(e)

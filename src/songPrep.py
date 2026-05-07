@@ -61,7 +61,11 @@ def main(argv):
             chunk_list = audiof.segmentAudio(songName, file, start, end)
             for chunk in chunk_list:
                 audiof.masterAudio(os.path.join(audiof.tmpPath, chunk))
-            audiof.mergingChunks([os.path.join(audiof.tmpPath, c) for c in chunk_list])
+            audiof.mergingChunks(
+                [os.path.join(audiof.tmpPath, c) for c in chunk_list],
+                out_name=audiof.tmp_master_track,
+            )
+            audiof.convertToMP3(out_name=f'{songName}.mp3')
             audiof.applyFade(songName)
         except Exception as e:
             log.error(e)
@@ -97,7 +101,7 @@ def main(argv):
     if not Path(f'{backup_loc}/{songName}.mp3').exists():
         try:
             shutil.copy(f'{dest_loc}/{songName}.mp3', backup_loc)
-        except Exception as e:
+        except Exception:
             msg = f'Oops...something went wrong BACKING UP {songName} to {backup_loc}.'
             log.error(msg)
             raise
