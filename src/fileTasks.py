@@ -4,7 +4,6 @@ from pathlib import Path
 from datetime import datetime
 from subprocess import check_call, CalledProcessError
 from pydub import AudioSegment
-from pydub.utils import make_chunks
 import matchering as mg
 
 from .paths import get_config, get_logger, TMP_DIR
@@ -122,19 +121,34 @@ class filePrep():
         combined = AudioSegment.from_file(path, format='mp3')
         combined = combined.fade_in(2000).fade_out(3000)
         combined.export(
-            path + '.mp3', format='mp3',
+            path, format='mp3',
             tags={'artist': artist, 'album': album, 'comments': 'Song created by NewMusicBot.'},
         )
 
     def segmentAudio(self, song_name, file, start, end):
-        start = int(start) * 1000
-        end = int(end) * 1000
-        chunk_size = 60000 * self.audio_max_chunk_length_minutes
-        chunk_list = []
-        audio = AudioSegment.from_file(file)[start:end]
-        chunks = make_chunks(audio, chunk_size)
-        for i, chunk in enumerate(chunks):
-            chunk_name = f'tmp{i}_{song_name}.wav'
-            chunk.export(os.path.join(self.tmpPath, chunk_name), format='wav')
-            chunk_list.append(chunk_name)
-        return chunk_list
+        start_s = int(start)
+        duration_s = int(end) - start_s
+        segment_s = self.audio_max_chunk_length_minutes * 60
+        trimmed = os.path.join(self.tmpPath, f'tmp_trim_{song_name}.wav')
+        try:
+            check_call([
+                'ffmpeg', '-y', '-v', 'quiet',
+                '-i', file,
+                '-ss', str(start_s), '-t', str(duration_s),
+                '-c:a', 'copy', trimmed,
+            ])
+            check_call([
+                'ffmpeg', '-y', '-v', 'quiet',
+                '-i', trimmed,
+                '-c:a', 'copy',
+                '-f', 'segment', '-segment_time', str(segment_s),
+                os.path.join(self.tmpPath, f'tmp_%03d_{song_name}.wav'),
+            ])
+        except CalledProcessError as e:
+            log.error(e)
+            raise
+        finally:
+            if os.path.exists(trimmed):
+                os.remove(trimmed)
+        chunk_list = sorted(glob.glob(os.path.join(self.tmpPath, f'tmp_*_{song_name}.wav')))
+        return [os.path.basename(c) for c in chunk_list]
