@@ -61,10 +61,9 @@ def main(file, section='DEFAULT', start=None, end=None, songName=None):
         #process the file
         try:
             process_track(audiof)
-        except Exception as e:
-            log.error(e)
+        except Exception:
             discordMessage(f'Oops...something went wrong MASTERING {audiof.wavTag}.', ALERT_CHANNEL_ID)
-            raise
+            sys.exit(1)
 
         try:
             if audiof.wavPath:

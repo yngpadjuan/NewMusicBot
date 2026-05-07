@@ -73,8 +73,8 @@ class filePrep():
                 '-f', 'segment', '-segment_time', segment_seconds,
                 chunk_pattern,
             ])
-        except CalledProcessError as e:
-            log.error(e)
+        except CalledProcessError:
+            #log.error(e)
             raise
         chunk_list = sorted(glob.glob(os.path.join(self.tmpPath, f'tmp_{self.sessionName}_*.wav')))
         return chunk_list
@@ -87,7 +87,7 @@ class filePrep():
                 mg.pcm24(tmp_out),
             ])
         except Exception as e:
-            log.error(e)
+            #log.error(e)
             if os.path.exists(tmp_out):
                 os.remove(tmp_out)
             raise
@@ -116,7 +116,7 @@ class filePrep():
         try:
             check_call(cmd)
         except CalledProcessError as e:
-            log.error(e)
+            #log.error(e)
             raise
 
         if not self.wavPath:
@@ -136,7 +136,7 @@ class filePrep():
                 out,
             ])
         except CalledProcessError as e:
-            log.error(e)
+            #log.error(e)
             raise
 
         os.replace(out, os.path.join(self.tmpPath, self.wavTag))
@@ -157,12 +157,13 @@ class filePrep():
                 '-c:a', 'copy', trimmed,
             ])
         except CalledProcessError as e:
-            log.error(e)
+            #log.error(e)
             raise
         os.replace(trimmed, src)
 
     def cleanup(self):
         patterns = [
+            f'{self.sessionName}.wav',
             f'tmp_{self.sessionName}_*.wav',
             f'tmp_{self.sessionName}.trim.wav',
             f'tmp_{self.sessionName}_file_inv.txt',
@@ -197,5 +198,7 @@ def process_track(filePrepObject):
             filePrepObject.masterAudio(chunk)
         filePrepObject.mergingChunks(chunkList)
         filePrepObject.convertToMP3()
-    finally:
+    except Exception as e:
+        log.error(e)
         filePrepObject.cleanup()
+        raise
