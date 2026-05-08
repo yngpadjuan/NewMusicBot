@@ -8,6 +8,8 @@ log = get_logger(__name__)
 
 
 class serverConnect:
+    _ftp_timeout = 30
+
     def __init__(self, file, dest_folder):
         creds = load_credentials()
         self.server_ip = creds['server_ip']
@@ -33,7 +35,7 @@ class serverConnect:
 
         def background():
             try:
-                with ftplib.FTP(self.server_ip) as ftp:
+                with ftplib.FTP(self.server_ip, timeout=self._ftp_timeout) as ftp:
                     try:
                         ftp.login(self.username, self.api_key)
                         ftp.cwd(self.dest_folder)
@@ -87,23 +89,19 @@ class serverConnect:
     def fileExists(self):
         _, f = os.path.split(self.file)
         try:
-            with ftplib.FTP(self.server_ip) as ftp:
+            with ftplib.FTP(self.server_ip, timeout=self._ftp_timeout) as ftp:
                 ftp.login(self.username, self.api_key)
                 ftp.cwd(self.dest_folder)
-                filelist = []
-                ftp.retrlines('LIST', filelist.append)
-                for entry in filelist:
-                    log.debug(f)
-                    if f in entry:
-                        if os.path.getsize(self.file) == ftp.size(f):
-                            return True
+                return ftp.size(f) == os.path.getsize(self.file)
+        except ftplib.error_perm:
+            return False
         except Exception as e:
             log.exception('fileExists check failed: %s', e)
-        return False
+            return False
 
     def deleteFile(self):
         _, f = os.path.split(self.file)
-        with ftplib.FTP(self.server_ip) as ftp:
+        with ftplib.FTP(self.server_ip, timeout=self._ftp_timeout) as ftp:
             ftp.login(self.username, self.api_key)
             ftp.cwd(self.dest_folder)
             ftp.delete(f)
