@@ -3,7 +3,7 @@ import glob
 from pathlib import Path
 from datetime import datetime
 from random import choice
-from subprocess import check_call, CalledProcessError
+from subprocess import run as _run, CalledProcessError
 import matchering as mg
 
 from .paths import get_config, get_logger, TMP_DIR, WORDLISTS_DIR
@@ -67,14 +67,14 @@ class filePrep():
         src = os.path.join(self.tmpPath, self.wavTag)
         chunk_pattern = os.path.join(self.tmpPath, f'tmp_{self.sessionName}_%03d.wav')
         try:
-            check_call([
+            _run([
                 'ffmpeg', '-y', '-i', src,
-                '-v', 'quiet', '-c:a', 'copy',
+                '-loglevel', 'error', '-c:a', 'copy',
                 '-f', 'segment', '-segment_time', segment_seconds,
                 chunk_pattern,
-            ])
-        except CalledProcessError:
-            #log.error(e)
+            ], capture_output=True, text=True, check=True)
+        except CalledProcessError as e:
+            log.error('ffmpeg fileChunk failed: %s', e.stderr)
             raise
         chunk_list = sorted(glob.glob(os.path.join(self.tmpPath, f'tmp_{self.sessionName}_*.wav')))
         return chunk_list
@@ -101,7 +101,7 @@ class filePrep():
         log.info(f'Converting to MP3: {self.mp3Tag}')
         src = os.path.join(self.tmpPath, self.wavTag)
         dst = os.path.join(self.tmpPath, self.mp3Tag)
-        cmd = ['ffmpeg', '-v', 'quiet', '-i', src]
+        cmd = ['ffmpeg', '-loglevel', 'error', '-i', src]
         if self.start_time and self.end_time:
             duration_s = int(self.end_time) - int(self.start_time)
             cmd += ['-af', f'afade=t=in:st=0:d=2,afade=t=out:st={duration_s - 3}:d=3']
@@ -114,9 +114,9 @@ class filePrep():
         ]
 
         try:
-            check_call(cmd)
+            _run(cmd, capture_output=True, text=True, check=True)
         except CalledProcessError as e:
-            #log.error(e)
+            log.error('ffmpeg convertToMP3 failed: %s', e.stderr)
             raise
 
         if not self.wavPath:
@@ -130,13 +130,13 @@ class filePrep():
             for item in chunk_list:
                 fh.write(f"file '{item}'\n")
         try:
-            check_call([
-                'ffmpeg', '-f', 'concat', '-safe', '0', '-i', tmp_list,
-                '-v', 'quiet', '-c', 'copy',
+            _run([
+                'ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', tmp_list,
+                '-loglevel', 'error', '-c', 'copy',
                 out,
-            ])
+            ], capture_output=True, text=True, check=True)
         except CalledProcessError as e:
-            #log.error(e)
+            log.error('ffmpeg mergingChunks failed: %s', e.stderr)
             raise
 
         os.replace(out, os.path.join(self.tmpPath, self.wavTag))
@@ -150,14 +150,14 @@ class filePrep():
         src = os.path.join(self.tmpPath, self.wavTag)
         trimmed = os.path.join(self.tmpPath, f'tmp_{self.sessionName}.trim.wav')
         try:
-            check_call([
-                'ffmpeg', '-y', '-v', 'quiet',
+            _run([
+                'ffmpeg', '-y', '-loglevel', 'error',
                 '-i', src,
                 '-ss', str(start_s), '-t', str(duration_s),
                 '-c:a', 'copy', trimmed,
-            ])
+            ], capture_output=True, text=True, check=True)
         except CalledProcessError as e:
-            #log.error(e)
+            log.error('ffmpeg segmentAudio failed: %s', e.stderr)
             raise
         os.replace(trimmed, src)
 
