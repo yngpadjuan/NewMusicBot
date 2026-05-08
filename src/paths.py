@@ -22,6 +22,8 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 _config: RawConfigParser | None = None
 
+#set discord.py logger to warning level to avoid cluttering logs with connection info
+logging.getLogger('discord.gateway').setLevel(logging.WARNING)
 
 def get_config() -> RawConfigParser:
     global _config
