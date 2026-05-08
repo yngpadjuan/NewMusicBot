@@ -123,7 +123,7 @@ class filePrep():
             os.remove(src)
 
     def mergingChunks(self, chunk_list):
-        out = os.path.join(self.tmpPath, f'{self.wavTag}.tmp')
+        out = os.path.join(self.tmpPath, f'tmp_{self.wavTag}')
         log.info(f'Merging chunk list to {out}')
         tmp_list = os.path.join(self.tmpPath, f'tmp_{self.sessionName}_file_inv.txt')
         with open(tmp_list, 'w') as fh:

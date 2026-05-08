@@ -38,7 +38,7 @@ class serverConnect:
                         ftp.login(self.username, self.api_key)
                         ftp.cwd(self.dest_folder)
                     except Exception as e:
-                        log.error(e)
+                        log.exception('FTP login/cwd failed: %s', e)
                         return
 
                     _, f = os.path.split(self.file)
@@ -63,9 +63,9 @@ class serverConnect:
                             )
                         log.info(response)
                     except Exception as e:
-                        log.error(e)
+                        log.exception('FTP storbinary failed: %s', e)
             except Exception as e:
-                log.error(f'Unable to connect to server. {e}')
+                log.exception('Unable to connect to server: %s', e)
 
         percent_complete = 0
         t = threading.Thread(target=background)
@@ -86,16 +86,19 @@ class serverConnect:
 
     def fileExists(self):
         _, f = os.path.split(self.file)
-        with ftplib.FTP(self.server_ip) as ftp:
-            ftp.login(self.username, self.api_key)
-            ftp.cwd(self.dest_folder)
-            filelist = []
-            ftp.retrlines('LIST', filelist.append)
-            for entry in filelist:
-                log.debug(f)
-                if f in entry:
-                    if os.path.getsize(self.file) == ftp.size(f):
-                        return True
+        try:
+            with ftplib.FTP(self.server_ip) as ftp:
+                ftp.login(self.username, self.api_key)
+                ftp.cwd(self.dest_folder)
+                filelist = []
+                ftp.retrlines('LIST', filelist.append)
+                for entry in filelist:
+                    log.debug(f)
+                    if f in entry:
+                        if os.path.getsize(self.file) == ftp.size(f):
+                            return True
+        except Exception as e:
+            log.exception('fileExists check failed: %s', e)
         return False
 
     def deleteFile(self):
