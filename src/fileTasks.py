@@ -119,8 +119,6 @@ class filePrep():
             log.error('ffmpeg convertToMP3 failed: %s', e.stderr)
             raise
 
-        if not self.wavPath:
-            os.remove(src)
 
     def mergingChunks(self, chunk_list):
         out = os.path.join(self.tmpPath, f'tmp_{self.wavTag}')

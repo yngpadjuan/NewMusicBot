@@ -108,11 +108,10 @@ def main(file, section='DEFAULT', start=None, end=None, songName=None):
             discordMessage(f'Oops...something went wrong BACKING UP {audiof.mp3Tag}.', ALERT_CHANNEL_ID)
             raise
         else:
+            if not audiof.wavPath:
+                file = os.path.join(audiof.tmpPath, audiof.wavTag)
             try:
-                if audiof.wavPath:
-                    os.remove(file)
-                else:
-                    os.remove(os.path.join(audiof.tmpPath, audiof.wavTag))
+                os.remove(file)
             except Exception as e:
                 log.error(e)
                 discordMessage(f'Oops...unable to delete source {file}.', ALERT_CHANNEL_ID)
