@@ -40,14 +40,12 @@ if [ ! -f "${CONF}" ]; then
     read -rp "Discord bot token: " BOT_TOKEN
     read -rp "Alert channel ID: " ALERT_CHANNEL
     read -rp "Publish channel ID: " PUBLISH_CHANNEL
-    read -rp "Default location (basement/gigs/music) [basement]: " LOCATION
-    LOCATION="${LOCATION:-basement}"
-    read -rp "Watch folder for wav files (leave blank to use udev on Linux): " WATCH_FOLDER
+    read -rp "Mount point for wav files (leave blank to use udev on Linux): " WATCH_FOLDER
     read -rp "Artist name for MP3 tags: " ARTIST
     read -rp "Album name for MP3 tags: " ALBUM
 
     cat > "${CONF}" <<EOF
-[NewMusicBot]
+[DEFAULT]
 token = ${BOT_TOKEN}
 logLevel = INFO
 alertChannelId = ${ALERT_CHANNEL}
