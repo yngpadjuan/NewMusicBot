@@ -60,8 +60,7 @@ class PublishModal(discord.ui.Modal, title='Publish Song'):
         song      = self.filename.value.strip()
         start_raw = self.start_time.value.strip()
         stop_raw  = self.stop_time.value.strip()
-        title     = self.song_title.value.strip() or None
-
+        title     = re.sub(r"[^\w\s\-',\(\)&!?]", '', self.song_title.value.strip()) or None
         try:
             start_dt = datetime.strptime(start_raw, '%H:%M:%S')
             start    = str(start_dt.second + start_dt.minute * 60 + start_dt.hour * 3600)
