@@ -2,6 +2,7 @@ import os
 import queue
 import platform
 import threading
+import time
 from pathlib import Path
 
 import discord
@@ -67,7 +68,7 @@ def _udev_listener():
                     candidates = [
                         Path(f"{config.get('DEFAULT', 'mountPoint', fallback='')}/{device.get('ID_FS_UUID')}{sd_subfolder}"),
                         Path(f"{config.get('DEFAULT', 'mountPoint', fallback='')}/H4N_SD{sd_subfolder}")
-                    ]                    
+                    ]
                     for c in candidates:
                         log.debug(f'Checking candidate: {c} (exists={c.exists()})')
 
@@ -87,32 +88,81 @@ def _udev_listener():
     monitor.filter_by(subsystem='block')
     observer = MonitorObserver(monitor, callback=on_device_event, name='monitor-observer')
     observer.start()
-    _discord_alert('NewMusicBot is ready')
     observer.join()
 
 
-def _watchdog_listener():
+def _wait_for_write_complete(path: str, stable_checks: int = 3, interval: float = 1.0) -> bool:
+    """Poll until file size is stable for `stable_checks` consecutive reads, or file disappears."""
+    last_size = -1
+    streak = 0
+    while streak < stable_checks:
+        try:
+            size = os.path.getsize(path)
+        except OSError:
+            return False
+        if size == last_size:
+            streak += 1
+        else:
+            streak = 0
+            last_size = size
+        if streak < stable_checks:
+            time.sleep(interval)
+    return True
+
+
+def _watchdog_folder_listener():
     from watchdog.observers import Observer
     from watchdog.events import FileSystemEventHandler, FileCreatedEvent
 
-    watch_folder = config.get('DEFAULT', 'mountPoint', fallback='')
-    if not watch_folder:
-        log.error('mountPoint not set in settings.conf; watchdog listener cannot start.')
-        return
-
-    watch_path = Path(watch_folder)
-    watch_path.mkdir(parents=True, exist_ok=True)
+    use_close_event = platform.system() == 'Linux'
+    if use_close_event:
+        from watchdog.events import FileClosedEvent
 
     class _Handler(FileSystemEventHandler):
+        def __init__(self, section):
+            self.section = section
+
+        def _enqueue(self, path):
+            if _wait_for_write_complete(path):
+                q.put([path, self.section, None, None, None])
+            else:
+                log.warning(f'File disappeared before write completed: {path}')
+
         def on_created(self, event):
+            if use_close_event:
+                return
             if isinstance(event, FileCreatedEvent) and event.src_path.endswith('.wav'):
-                q.put([event.src_path, 'DEFAULT', None, None, None])
+                threading.Thread(target=self._enqueue, args=(event.src_path,), daemon=True).start()
+
+        def on_closed(self, event):
+            if use_close_event and isinstance(event, FileClosedEvent) and event.src_path.endswith('.wav'):
+                q.put([event.src_path, self.section, None, None, None])
 
     observer = Observer()
-    observer.schedule(_Handler(), str(watch_path), recursive=False)
+    watched_count = 0
+
+    default_loc = config.get('DEFAULT', 'watchdog_location', fallback='').strip()
+    if default_loc:
+        p = Path(default_loc)
+        p.mkdir(parents=True, exist_ok=True)
+        observer.schedule(_Handler('DEFAULT'), str(p), recursive=False)
+        log.info(f'Watchdog monitoring {p} (DEFAULT)')
+        watched_count += 1
+
+    for section in config.sections():
+        loc = config.get(section, 'watchdog_location', fallback='').strip()
+        if loc:
+            p = Path(loc)
+            p.mkdir(parents=True, exist_ok=True)
+            observer.schedule(_Handler(section), str(p), recursive=False)
+            log.info(f'Watchdog monitoring {p} ({section})')
+            watched_count += 1
+
+    if watched_count == 0:
+        log.info('No watchdog_location configured; watchdog folder listener not started.')
+        return
+
     observer.start()
-    log.info(f'Watching {watch_path} for new wav files.')
-    _discord_alert('NewMusicBot is ready')
     try:
         observer.join()
     finally:
@@ -123,17 +173,18 @@ def _start_listener():
     if platform.system() == 'Linux':
         try:
             import pyudev  # noqa: F401
-            log.info('Using udev listener.')
-            _udev_listener()
-            return
+            log.info('Starting udev listener.')
+            threading.Thread(target=_udev_listener, daemon=True).start()
         except ImportError:
-            log.warning('pyudev not available on Linux; falling back to watchdog.')
+            log.warning('pyudev not available on Linux; udev listener skipped.')
+
+    _discord_alert('NewMusicBot is ready')
+
     try:
         import watchdog  # noqa: F401
-        log.info('Using watchdog listener.')
-        _watchdog_listener()
+        _watchdog_folder_listener()
     except ImportError:
-        log.error('Neither pyudev nor watchdog is installed. No file watcher started.')
+        log.warning('watchdog not installed; watchdog folder listener not started.')
 
 
 # ── Bot lifecycle ─────────────────────────────────────────────────────────────

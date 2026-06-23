@@ -58,6 +58,7 @@ Comments must be on their own lines — inline `#` comments are not supported by
 | `artist` | No | MP3 ID3 artist tag |
 | `album` | No | MP3 ID3 album tag |
 | `mountPoint` | Linux fallback / non-Linux | Directory watched for new `.wav` files (watchdog) and SD card mount root (udev) |
+| `watchdog_location` | No | Optional direct drop folder watched for new `.wav` files and queued with `[DEFAULT]` settings |
 | `srcFolder` | Yes for `/publish` | Root directory containing `{year}/wav/` subdirs used to locate archive files |
 | `destFolder` | Yes | Default destination for processed MP3s (used by publish flow) |
 | `backupFolder` | Yes | Default backup destination |
@@ -72,6 +73,7 @@ Each location section overrides any `[DEFAULT]` keys it defines. `sessionName` a
 |---|---|
 | `sessionName` | Label used in output filenames and Discord messages |
 | `subFolder` | Subfolder path on the SD card (e.g. `/STEREO/FOLDER01`) |
+| `watchdog_location` | Optional direct drop folder watched for new `.wav` files and queued with this location's settings |
 | `destFolder` | Destination folder (year appended automatically for archival flow) |
 | `backupFolder` | Backup folder (year appended automatically for archival flow) |
 | `ftpFolder` | Destination path on the FTP server |

@@ -6,6 +6,7 @@ publishChannelId =         # Discord channel ID for public song announcements
 artist =                   # MP3 ID3 artist tag
 album =                    # MP3 ID3 album tag
 mountPoint =               # Folder to watch for new wav files (non-Linux / no SD card)
+watchdog_location =        # Folder to watch for dropped .wav files (runs alongside udev on Linux)
 srcFolder =
 destFolder =
 backupFolder =
